@@ -1,12 +1,16 @@
-import numpy as np 
+import numpy as np
 import healpy as hp
-import asdf 
 from scipy.spatial import cKDTree
 
-from config import HALO_CATALOGS_DATA_PATH
-from y_profile import compute_R_delta
 
-#CONSTANTS 
+from tszpaint.y_profile import (
+    create_battaglia_profile,
+    compute_R_delta,
+    angular_size,
+)
+from tszpaint.interpolator import BattagliaLogInterpolator
+from tszpaint.config import DATA_PATH
+
 
 #HEALPix
 NSIDE = 512 # resolution of the map
@@ -14,11 +18,21 @@ NPIX = hp.nside2npix(NSIDE)  # number of pixels in the map
 m = np.arange(NPIX) # RING ordering of pixels
 
 
+MODEL = create_battaglia_profile()
+
+PYTHON_PATH = DATA_PATH / "y_values_python.pkl"
+JAX_PATH = DATA_PATH / "y_values_jax_2.pkl"
+JULIA_PATH = DATA_PATH / "battaglia_interpolation.jld2"
+HALO_CATALOGS_PATH = DATA_PATH / "file_name"
+
+Z = 0.5 
+
+
 def read_asdf():
     """
     Given the AbacusSummit ASDF file, find information.
     """
-    halo_cat = asdf.open(HALO_CATALOGS_DATA_PATH) 
+    halo_cat = asdf.open(HALO_CATALOGS_PATH) 
     halo_cat.info()
 
 
@@ -50,11 +64,11 @@ def create_mock_halo_catalogs(NPIX, m):
     #randomly allocate halo-center positions in HEALPix coordinates
     halo_theta = np.pi * np.random.rand(N_halos)
     halo_phi = 2 * np.pi * np.random.rand(N_halos)
-    M_halos = np.exp(np.random.log(12,14,N_halos))
+    logM = np.random.uniform(12.0, 14.0, size=N_halos)
+    M_halos = 10.0**logM
 
-    halo_data = halo_theta, halo_phi, M_halos
 
-    return halo_data
+    return halo_theta, halo_phi, M_halos
 
 
 def convert_rad_to_cart(data):
@@ -71,20 +85,37 @@ def convert_rad_to_cart(data):
     return xyz
 
 
-def build_tree(data):
+def compute_theta_200(model, M_halos, Z = 0.5, delta=200):
     """
-    Build a KDTree in 3D
+    Compute θ_200 (angular radius) for each halo.
     """
-    xyz = convert_rad_to_cart() 
-    print(f"\nBuilding tree for {NPIX} pixel centers...")
-    tree = cKDTree(xyz[0:2])
-    return tree
+    theta_200 = np.empty_like(M_halos, dtype=float)
+    for M in M_halos:
+        R_200 = compute_R_delta(model, M, Z, delta=delta)  
+        theta_200[M] = angular_size(model, R_200, Z)       
+    return theta_200
+
+
+def load_interpolator(path=JAX_PATH):
+    return BattagliaLogInterpolator.from_pickle(path)
+
+
+def build_tree(nside=NSIDE):
+    """
+    Build a 3D KDTree of HEALPix pixels
+    """
+    npix = hp.nside2npix(nside)
+    pix_indices = np.arange(npix)
+    theta, phi = hp.pix2ang(nside, pix_indices)
+    pix_xyz = convert_rad_to_cart(theta, phi)
+    tree = cKDTree(pix_xyz)
+    return tree, pix_xyz, pix_indices
 
 
 
 def query_tree(
     halo_pos_cart,      # (N_halos, 3) - Cartesian positions of halo centers
-    R_200,              # (N_halos,) - R200 for each halo 
+    theta_200,              # (N_halos,) - theta200 for each halo 
     particle_tree,      # cKDTree of particle/pixel positions
     particle_pos_cart,  # (N_particles, 3) - Cartesian positions of particles
     N=4,                # Multiple of R_200 to search
@@ -106,7 +137,7 @@ def query_tree(
     
     for i in range(N_halos):
         halo_center = halo_pos_cart[i] 
-        search_radius = N * R_200[i]
+        search_radius = N * theta_200[i]
         
         particles_in_halo = particle_tree.query_ball_point(halo_center, r=search_radius)
         
