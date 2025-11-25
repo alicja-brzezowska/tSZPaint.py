@@ -33,34 +33,43 @@ def get_random_points(num_per_dim: int = 10):
     return np.meshgrid(log_thetas, zs, log_ms, indexing="ij")
 
 if __name__ == "__main__": 
-    python_interpolator = BattagliaLogInterpolator.from_pickle(JAX_PATH) 
+    python_interpolator = BattagliaLogInterpolator.from_pickle(PYTHON_PATH) 
     logger.info("built JAX interpolator from grid") 
     julia_interpolator = BattagliaLogInterpolator.from_jld2(JULIA_PATH) 
     print("Built julia interpolator from grid") 
+    jax_interpolator = BattagliaLogInterpolator.from_pickle(JAX_PATH) 
+    print("Built JAX interpolator from grid") 
     
     log_thetas, zs, log_ms = get_random_points() 
     python_vals = python_interpolator.eval_for_logs(log_thetas, zs, log_ms) 
     julia_vals = julia_interpolator.eval_for_logs(log_thetas, zs, log_ms) 
+    JAX_vals = jax_interpolator.eval_for_logs(log_thetas, zs, log_ms) 
 
     relative_errors = np.abs(python_vals - julia_vals) / np.maximum(
+        np.abs(julia_vals), 1e-12
+    )
+
+    relative_errors_jax = np.abs(JAX_vals - julia_vals) / np.maximum(
         np.abs(julia_vals), 1e-12
     )
     max_idx = np.unravel_index(np.argmax(relative_errors), relative_errors.shape)
     max_python_val = python_vals[max_idx]
     max_julia_val = julia_vals[max_idx]
+    max_JAX_val = JAX_vals[max_idx]
     max_relative_error = relative_errors[max_idx]
+    max_relative_error_JAX = relative_errors_jax[max_idx]
 
     messages = (
         f"Max relative error: {max_relative_error}",
+        f"Max relative error JAX: {max_relative_error_JAX}",
         f"Python value: {max_python_val}",
         f"Julia value: {max_julia_val}",
+        f"JAX value: {max_JAX_val}",
     )
 
-    if max_relative_error < EPS:
-        for message in messages:
-            logger.info(message)
-    else:
-        for message in messages:
-            logger.error(message)
-
-    
+if max_relative_error < EPS and max_relative_error_JAX < EPS:
+    for message in messages:
+        logger.info(message)
+else:
+    for message in messages:
+        logger.error(message)
