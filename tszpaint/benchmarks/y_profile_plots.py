@@ -104,12 +104,8 @@ def plot_Y_vs_M(jax_interp, julia_interp, python_interp):
     plt.semilogx(M, rel_err_jax, label= "JAX / direct - 1")
 
     plt.xlabel(r"$M\ [M_\odot]$")
-    plt.ylabel(r"relative error vs direct")
-    plt.title(
-        rf"Relative error at $\theta={theta:.2e}$, $z={z}$"
-        + "\n"
-        + rf"max rel err: py={max_rel_err_py:.3e}, jl={max_rel_err_jl:.3e}"
-    )
+    plt.ylabel(r"Relative error of interpolators")
+    plt.title("Relative error at $\theta={theta:.2e}$, $z={z}$")
     plt.legend()
     plt.grid(True, which="both", ls=":")
     plt.tight_layout()
@@ -157,11 +153,7 @@ def plot_Y_vs_theta(jax_interp, julia_interp, python_interp):
 
     plt.xlabel(r"$\theta\ \mathrm{[radians]}$")
     plt.ylabel(r"$Y(\theta, z, M)$")
-    plt.title(
-        rf"$Y$ vs $\theta$ at $z={z}, M=10^{{{logM_fixed:.1f}}} M_\odot$"
-        + "\n"
-        + rf"max |ΔY| (Python − Julia) = {max_diff_interp:.3e}"
-    )
+    plt.title("$Y$ vs $\theta$ at $z={z}, M=10^{{{logM_fixed:.1f}}} M_\odot$")
     plt.legend()
     plt.grid(True, which="both", ls=":")
     plt.tight_layout()
@@ -173,12 +165,9 @@ def plot_Y_vs_theta(jax_interp, julia_interp, python_interp):
     plt.semilogx(theta, rel_err_jax, "--", label="JAX / direct − 1")
 
     plt.xlabel(r"$\theta\ \mathrm{[radians]}$")
-    plt.ylabel(r"relative error vs direct")
+    plt.ylabel(r"relative error of interpolators")
     plt.title(
-        rf"Relative error at $z={z}, M=10^{{{logM_fixed:.1f}}} M_\odot$"
-        + "\n"
-        + rf"max rel err: py={max_rel_err_py:.3e}, jl={max_rel_err_jl:.3e}"
-    )
+        rf"Relative error at $z={z}, M=10^{{{logM_fixed:.1f}}} M_\odot$")
     plt.legend()
     plt.grid(True, which="both", ls=":")
     plt.tight_layout()
