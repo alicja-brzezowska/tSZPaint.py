@@ -2,28 +2,29 @@ import pickle
 from pathlib import Path
 from time import perf_counter
 
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import unxt as u
-from jax.typing import ArrayLike
-from quadax import quadgk   # jax friendly quadrature integration
+from jax.typing import ArrayLike 
+from quadax import quadts # jax friendly quadrature integration
 from wcosmo import comoving_distance, efunc  #jax friendly atropy.cosmology
 from wcosmo.utils import disable_units  # wcosmo objects have defaults units; disable as jax arrays don't support units
 
-import constants as const
+import tszpaint.constants as const
 
 jax.config.update("jax_enable_x64", True) #make float 64 
 disable_units()
 
-FILE = Path("y_values_jax.pkl")
+FILE = Path("y_values_jax_2.pkl")
 
 G_VALUE = const.G_SI.value
 
 DELTA = 200
 SCALE = 1e9 
 ZMAX = 1e5
-RTOL = 1e-3 # saw that this was sufficient in tests, can change
+RTOL = 1e-4 # saw that this was sufficient in tests, can change
 
 
 def get_gnfw_params(mass: float, redshift: float):
@@ -77,7 +78,7 @@ def y_value(
         generalized_nfw = x_bar**gamma * (1 + x_bar**alpha) ** ((beta - gamma) / alpha)
         return SCALE * generalized_nfw
 
-    integral_value, _ = quadgk(
+    integral_value, _ = quadts(
         integrand,
         [0.0, ZMAX],  
         epsrel=RTOL,
@@ -94,21 +95,21 @@ def y_value(
     return jnp.maximum(0.0, compton)
 
 
-DIM = 128
+DIM = 256
 
 
 def measure_y_values(
     Omega_c: float = 0.2589,
     Omega_b: float = 0.0486,
     h: float = 0.6774,
-    N_log_theta: int = DIM,
-    log_theta_min: float = -16.5,
-    log_theta_max: float = 2.5,
+    N_log_theta: int = 2*DIM,
+    log_theta_min: float = -25.4,
+    log_theta_max: float = 11.5,
     z_min: float = 1e-3,
     z_max: float = 5.0,
     log_M_min: float = 11.0,
     log_M_max: float = 15.7,
-    N_z: int = DIM,
+    N_z: int = DIM, 
     N_log_M: int = DIM,
 ):
     OmegaM = Omega_b + Omega_c
@@ -190,3 +191,4 @@ def dump_to_file(
 
 if __name__ == "__main__":
     dump_to_file(*measure_y_values())
+

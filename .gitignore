@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+data/*.jld2
+data/*.pkl
+*.tar.gz
+

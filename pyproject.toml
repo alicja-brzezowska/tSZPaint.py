@@ -5,7 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "astropy>=7.1.1",
+    "cosmo>=0.7.0",
+    "h5py>=3.15.1",
     "jax>=0.8.0",
+    "matplotlib>=3.10.7",
+    "pandas>=2.3.3",
+    "quadax>=0.2.11",
+    "unxt>=1.7.7",
+    "wcosmo>=0.5.4",
 ]
 
 [dependency-groups]
