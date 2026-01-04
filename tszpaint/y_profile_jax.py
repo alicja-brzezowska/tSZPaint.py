@@ -24,7 +24,7 @@ G_VALUE = const.G_SI.value
 DELTA = 200
 SCALE = 1e9 
 ZMAX = 1e5
-RTOL = 1e-4 # saw that this was sufficient in tests, can change
+RTOL = 1e-3 # saw that this was sufficient in tests, can change
 
 
 def get_gnfw_params(mass: float, redshift: float):
@@ -103,8 +103,8 @@ def measure_y_values(
     Omega_b: float = 0.0486,
     h: float = 0.6774,
     N_log_theta: int = 2*DIM,
-    log_theta_min: float = -25.4,
-    log_theta_max: float = 11.5,
+    log_theta_min: float = -15.4,
+    log_theta_max: float = 1,
     z_min: float = 1e-3,
     z_max: float = 5.0,
     log_M_min: float = 11.0,

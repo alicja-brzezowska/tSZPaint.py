@@ -44,7 +44,7 @@ def los_simpson(x, zmax=1e5, n=2000000, scale = 1):
     return 2.0 * res / scale
 
 def los_trapezoid(x, zmax = 1e5, scale = 1):
-    y = np.linspace(0.0, zmax, 200000)
+    y = np.linspace(0.0, zmax, 20000000)
     r_3d = np.sqrt(y**2 + x**2)
     integrand = scale * generalized_nfw(r_3d, xc, alpha, beta, gamma)
     res = trapezoid(integrand, y)

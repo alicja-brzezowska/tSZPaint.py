@@ -9,8 +9,8 @@ PYTHON_PATH = DATA_PATH/ "y_values_python.pkl"
 JULIA_PATH = DATA_PATH / "battaglia_interpolation.jld2"
 JAX_PATH = DATA_PATH/ "y_values_jax_2.pkl"
 
-LOG_THETA_MIN = -16.5
-LOG_THETA_MAX = 2.5
+LOG_THETA_MIN = -7.5
+LOG_THETA_MAX = 0.5
 Z_MIN = 1e-3
 Z_MAX = 5.0
 LOG_M_MIN = 11.0
