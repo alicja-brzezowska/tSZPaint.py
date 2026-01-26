@@ -14,7 +14,7 @@ from wcosmo.utils import disable_units  # wcosmo objects have defaults units; di
 
 import tszpaint.constants as const
 
-jax.config.update("jax_enable_x64", True) #make float 64 
+jax.config.update("jax_enable_x64", False) #make float 64 
 disable_units()
 
 FILE = Path("y_values_jax_2.pkl")

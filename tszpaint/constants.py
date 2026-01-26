@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import unxt as u
 
-jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", False)
 
 G_CGS_ASTRO = aconst.G.cgs
 
