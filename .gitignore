@@ -5,10 +5,28 @@ build/
 dist/
 wheels/
 *.egg-info
+.DS_Store
+.vscode/
+*tempCodeRunnerFile*
 
 # Virtual environments
 .venv
+
+# Data files (large)
+data/interpolators/
 data/*.jld2
 data/*.pkl
+data/*.fits
+data/*.png
+data/*.pdf
 *.tar.gz
+*.pkl
+*.fits
+
+# Generated outputs
+benchmark_weights.csv
+data/comparison_output/
+
+# Miscellaneous/scratch
+miscellanous/
 
