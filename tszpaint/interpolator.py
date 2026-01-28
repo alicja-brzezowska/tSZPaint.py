@@ -117,7 +117,7 @@ class BattagliaLogInterpolator:
 
     def eval_for_logs(self, log_theta, z, log_M):
         if self.use_jax:
-            lists = jnp.stack([log_theta, z, log_M], axis = -1) #jax does not accept tuples
+            lists = jnp.stack([log_theta, z, log_M], axis = -1) 
             log_y = self.interpolator(lists)
             return jnp.exp(log_y)
         else:

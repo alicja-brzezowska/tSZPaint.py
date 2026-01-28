@@ -1,63 +1,66 @@
 import numpy as np
 import healpy as hp
 from scipy.spatial import cKDTree
-import adsf 
+from numba import jit, prange
+import asdf
 
 from tszpaint.y_profile import (
+    Battaglia16ThermalSZProfile,
     create_battaglia_profile,
     compute_R_delta,
     angular_size,
 )
 from tszpaint.interpolator import BattagliaLogInterpolator
-from tszpaint.config import DATA_PATH
+from tszpaint.config import DATA_PATH, INTERPOLATORS_PATH
 
-#HEALPix
-NSIDE = 1024 # resolution of the map
+# HEALPix
+NSIDE = 1024
 
-MODEL = create_battaglia_profile() 
-PYTHON_PATH = DATA_PATH / "y_values_python.pkl" 
-JAX_PATH = DATA_PATH / "y_values_jax_2.pkl" 
-JULIA_PATH = DATA_PATH / "battaglia_interpolation.jld2" 
+MODEL = create_battaglia_profile()
+PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
+JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
+JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
 HALO_CATALOGS_PATH = DATA_PATH / "file_name"
+Z = 0.5
+PAINT_METHOD = "vectorized"
 
 
-Z = 0.5 
-def read_asdf(): 
-    """ Given the AbacusSummit ASDF file, find information. """ 
-    halo_cat = asdf.open(HALO_CATALOGS_PATH) 
+def read_asdf():
+    """Given the AbacusSummit ASDF file, find information."""
+    halo_cat = asdf.open(HALO_CATALOGS_PATH)
     halo_cat.info()
 
 
-def create_mock_particle_data(NPIX, m): 
-    """ Create mock data for testing, mimicking Abacussummit data structure. 
-    Contains random number of particles per pixel. 
-    Inputs: HEALPix specific data 
-    Outputs: pixel radial coordinates, number of particles per pixel 
-    """ 
-    rng = np.random.default_rng(seed = 28) 
-    rints = rng.integers(low = 10, high = 300, size = NPIX) 
-    # convert to radial coordinates 
-    theta, phi = hp.pix2ang(NSIDE, m) 
-    particle_data = theta, phi, [rints[i] for i in m] 
-    return particle_data
+def create_mock_particle_data(NPIX, m):
+    """Create mock data for testing, mimicking Abacussummit data structure."""
+    rng = np.random.default_rng(seed=28)
+    baseline = 1_000_000_000
+    contrast = rng.lognormal(mean=0.0, sigma=2.0, size=len(m))
+    lam = baseline * contrast
+    particle_counts = rng.poisson(lam=lam).astype(np.int64)
+    theta, phi = hp.pix2ang(NSIDE, m)
+    return theta, phi, particle_counts
 
 
-def create_mock_halo_catalogs(NPIX, m): 
-    """ Create halo-catalog mock data for testing. Contains halo-centre position. """ 
-    N_halos = 100 #randomly allocate halo-center positions in HEALPix coordinates 
-    halo_theta = np.pi * np.random.rand(N_halos) 
-    halo_phi = 2 * np.pi * np.random.rand(N_halos) 
-    logM = np.random.uniform(12.0, 14.0, size=N_halos) 
-    M_halos = 10.0**logM 
+def create_mock_halo_catalogs(NPIX, m):
+    """Create halo-catalog mock data for testing."""
+    N_halos = 20000
+    rng = np.random.default_rng(123)
+    halo_theta = np.pi * rng.random(N_halos)
+    halo_phi = 2 * np.pi * rng.random(N_halos)
+    logM = rng.uniform(15.5, 16.5, size=N_halos)
+    M_halos = 10.0**logM
     return halo_theta, halo_phi, M_halos
 
-def convert_rad_to_cart(theta, phi): 
-    """ Given radial coordinates, convert to cartesian. Return the whole inputted data set. """ 
-    x = np.sin(theta) * np.cos(phi) 
-    y = np.sin(theta) * np.sin(phi) 
-    z = np.cos(theta) 
-    xyz = np.column_stack([x, y, z]) 
+
+def convert_rad_to_cart(theta, phi):
+    """Given radial coordinates, convert to cartesian."""
+    x = np.sin(theta) * np.cos(phi)
+    y = np.sin(theta) * np.sin(phi)
+    z = np.cos(theta)
+    xyz = np.column_stack([x, y, z])
     return xyz
+
 
 def compute_theta_200(
     model: Battaglia16ThermalSZProfile,
@@ -69,122 +72,304 @@ def compute_theta_200(
     R_200 = compute_R_delta(model, M_halos, Z, delta=delta)
     return angular_size(model, R_200, Z)
 
-def load_interpolator(path=JAX_PATH): 
+
+def load_interpolator(path=JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
 
 
-def build_tree(nside=NSIDE): 
-    """ Build a 3D KDTree of HEALPix pixels """ 
-    npix = hp.nside2npix(nside) # number of pixels in the map 
-    pix_indices = np.arange(npix) # RING ordering of pixels 
-    theta, phi = hp.pix2ang(nside, pix_indices) 
-    pix_xyz = convert_rad_to_cart(theta, phi) 
-    tree = cKDTree(pix_xyz) 
+def build_tree(nside=NSIDE):
+    """Build a 3D KDTree of HEALPix pixels."""
+    npix = hp.nside2npix(nside)
+    pix_indices = np.arange(npix)
+    theta, phi = hp.pix2ang(nside, pix_indices)
+    pix_xyz = convert_rad_to_cart(theta, phi)
+    tree = cKDTree(pix_xyz)
     return tree, pix_xyz, pix_indices
 
-# account for chi for particles when healpix to cartesian
 
 def query_tree(
-    halo_xyz: np.ndarray,  # (N_halos, 3) - Cartesian positions of halo centers (unit vectors)
-    theta_200: np.ndarray,  # (N_halos,) - theta200 for each halo (in radians)
-    particle_tree: cKDTree,  # cKDTree of pixel positions (we only use it for index lookup)
-    particle_xyz: np.ndarray,  # (N_pixels, 3) - Cartesian positions of pixels (unit vectors)
-    N: int = 4,  # Multiple of theta_200 to search
+    halo_xyz: np.ndarray,
+    theta_200: np.ndarray,
+    particle_tree: cKDTree,
+    particle_xyz: np.ndarray,
+    N: int = 4,
 ):
     """
     Query the tree out to N times theta_200 to find which pixels belong to which halo.
-    Return: flat pixel_indices, angular distances (radians), halo_start, halo_count.
     """
-    N_halos = len(halo_xyz)
-
-    pixel_indices = []
-    distances = []
-    halo_starts = np.zeros(N_halos, dtype=np.int64)
-    halo_counts = np.zeros(N_halos, dtype=np.int64)
-
-    print(f"Querying {N_halos} halos (search radius = {N}×theta200)...")
-
+    N_halos = halo_xyz.shape[0]
     search_angles = N * theta_200
-    search_radii = 2.0 * np.sin(0.5 * search_angles) # again chi
+    search_radii = 2.0 * np.sin(0.5 * search_angles)
+
     pix_in_halos = particle_tree.query_ball_point(x=halo_xyz, r=search_radii)
-    pixel_indices = pix_in_halos.ravel()  # [[1, 2, 3], [4]] -> [1, 2, 3, 4]
-    halo_counts = np.array([len(indices) for indices in pixel_indices])
-    halo_starts = np.cumsum(halo_counts) - 1  # [1, 2, 3] -> [1, 3, 6] -> [0, 2, 5]
 
-    indices_repeated = [
-        [np.repeat(index, count)] for index, count in enumerate(halo_counts)
-    ]  # [1, 2, 1] -> [[0], [1, 1], [2]]
+    halo_counts = np.fromiter(
+        (len(p) for p in pix_in_halos), dtype=np.int64, count=N_halos
+    )
+    halo_starts = np.zeros(N_halos, dtype=np.int64)
+    if N_halos > 1:
+        halo_starts[1:] = np.cumsum(halo_counts[:-1])
 
-    indices_repeated = np.array(
-        [idx for row in indices_repeated for idx in row]
-    )  # [0, 1, 1, 2]
-    pixel_locations = np.array(
-        [particle_xyz[idx] for idx in indices_repeated]
-    )  # [0, 1, 1, 2] -> [[x0,y0,z0], [x1,y1,z1], [x1,y1,z1], [x2,y2,z2]]
+    total = int(halo_counts.sum())
+    if total == 0:
+        return (
+            np.empty(0, dtype=np.int64),
+            np.empty(0, dtype=np.float64),
+            halo_starts,
+            halo_counts,
+            np.empty(0, dtype=np.int64),
+        )
 
-    cosangs = np.clip(pixel_locations @ halo_xyz, -1.0, 1.0)
-    distances = np.arccos(cosangs)
+    pixel_indices_flat = np.concatenate(
+        [np.asarray(p, dtype=np.int64) for p in pix_in_halos]
+    )
+    halo_indices = np.repeat(np.arange(N_halos, dtype=np.int64), halo_counts)
 
-    return pixel_indices, distances, halo_starts, halo_counts
+    pixel_xyz = particle_xyz[pixel_indices_flat]
+    halo_xyz_repeated = halo_xyz[halo_indices]
+    cosangs = np.clip(np.sum(pixel_xyz * halo_xyz_repeated, axis=1), -1.0, 1.0)
+    distances_flat = np.arccos(cosangs)
 
+    return pixel_indices_flat, distances_flat, halo_starts, halo_counts, halo_indices
+
+
+@jit(nopython=True, parallel=True, cache=True)
+def _compute_weights_numba(
+    distances: np.ndarray,
+    halo_starts: np.ndarray,
+    halo_counts: np.ndarray,
+    theta_200: np.ndarray,
+    raw_weights: np.ndarray,
+    N: float,
+    nbins: int,
+):
+    """
+    Numba-optimized function to compute normalized weights for shells around halos.
+    """
+    N_halos = len(theta_200)
+    weights = np.ones_like(distances, dtype=np.float64)
+    bin_edges = np.linspace(0.0, N, nbins + 1)
+
+    # Processing halos in parallel
+    for h in prange(N_halos):
+        start = halo_starts[h]
+        count = halo_counts[h]
+
+        if count == 0:
+            continue
+
+        # Extract data for this halo
+        theta_h = distances[start : start + count]
+        w_h = raw_weights[start : start + count].copy()
+
+        # Compute radial coordinate
+        x_h = theta_h / theta_200[h]
+
+        # Assign to bins
+        bin_ids = np.searchsorted(bin_edges[1:], x_h, side="left")
+        bin_ids = np.minimum(bin_ids, nbins - 1)
+
+        # Count and sum per bin
+        bin_counts_h = np.zeros(nbins, dtype=np.float64)
+        bin_sums_h = np.zeros(nbins, dtype=np.float64)
+
+        for i in range(len(w_h)):
+            b = bin_ids[i]
+            bin_counts_h[b] += 1.0
+            bin_sums_h[b] += w_h[i]
+
+        # Compute normalization factors
+        for i in range(len(w_h)):
+            b = bin_ids[i]
+            if bin_sums_h[b] > 0:
+                w_h[i] *= bin_counts_h[b] / bin_sums_h[b]
+
+        weights[start : start + count] = w_h
+
+    return weights
 
 
 def weigh_particle_contr(
     pixel_indices: np.ndarray,
     distances: np.ndarray,
-    halo_start: np.ndarray,
-    halo_count: np.ndarray,
+    halo_starts: np.ndarray,
+    halo_counts: np.ndarray,
     theta_200: np.ndarray,
     particle_counts: np.ndarray,
     N: float = 4.0,
     nbins: int = 20,
 ):
     """
-    Compute per-pixel weights that encode asymmetry for each halo.
-
-    For each halo:
-      - x = theta / theta_200
-      - bin x in [0, N]
-      - in each bin, compute mean particle count
-      - weight = count / mean_count 
-    Returns:
-      weights: same shape as `distances` (flat array aligned with pixel_indices).
+    Compute weights for particle contributions within halos.
     """
-    N_halos = len(theta_200)
-    weights = np.ones_like(distances, dtype=float)
+    counts = particle_counts[pixel_indices]
+    raw_weights = np.power(counts + 1e-10, 5.0 / 3.0)
 
-    # radial bins in units of theta_200 (x = theta/theta_200)
-    bin_edges = np.linspace(0.0, N, nbins + 1)
-    x = distances / theta_200
-    x_valid_mask = (x >= 0.0) & (x <= N)
-    x = np.where(
-        x_valid_mask, x, 0.0
-    )  
-    thetas = np.where(x_valid_mask, distances, -1)
-    counts = np.where(x_valid_mask, particle_counts, 0)
-    bin_ids = np.clip(np.digitize(x, bin_edges) - 1, 0, nbins - 1)
+    weights = _compute_weights_numba(
+        distances, halo_starts, halo_counts, theta_200, raw_weights, N, nbins
+    )
 
-    mean_counts = np.zeros(nbins, dtype=float)
-    for b in range(nbins):
-        in_bin = bin_ids == b
-        if np.any(in_bin):
-            mean_counts[b] = counts[in_bin].mean()
+    return weights
+
+
+def paint_y_vectorized(
+    halo_theta: np.ndarray,
+    halo_phi: np.ndarray,
+    M_halos: np.ndarray,
+    particle_counts: np.ndarray,
+    interpolator: BattagliaLogInterpolator,
+    z: float = Z,
+    nside: int = NSIDE,
+    N: float = 4.0,
+    nbins: int = 20,
+    use_weights: bool = True,
+):
+
+    # Build KDTree
+    tree, pix_xyz, pix_indices = build_tree(nside)
+    npix = len(pix_indices)
+
+    # Convert halo positions to cartesian
+    halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
+    theta_200 = compute_theta_200(MODEL, M_halos, Z=z, delta=200)
+
+    # Query tree 
+    pixel_indices_flat, distances_flat, halo_starts, halo_counts, _ = query_tree(
+        halo_xyz=halo_xyz,
+        theta_200=theta_200,
+        particle_tree=tree,
+        particle_xyz=pix_xyz,
+        N=N,
+    )
+
+    # TEST: Switchable compute weights
+    if use_weights:
+        weights = weigh_particle_contr(
+            pixel_indices=pixel_indices_flat,
+            distances=distances_flat,
+            halo_starts=halo_starts,
+            halo_counts=halo_counts,
+            theta_200=theta_200,
+            particle_counts=particle_counts,
+            N=N,
+            nbins=nbins,
+        )
+    else:
+        weights = np.ones(len(pixel_indices_flat), dtype=np.float64)
+
+    # Prepare mass and theta arrays for interpolation
+    log_M_halos = np.log10(M_halos)
+    log_theta_all = np.log(distances_flat + 1e-40)
+
+    # Create halo index array to map each pixel to its halo's mass
+    halo_indices_for_pixels = np.repeat(np.arange(len(M_halos)), halo_counts)
+    log_M_all = log_M_halos[halo_indices_for_pixels]
+    z_all = np.full_like(distances_flat, z, dtype=float)
+
+    # Single interpolation call for all points
+    y_iso_all = interpolator.eval_for_logs(log_theta_all, z_all, log_M_all)
+
+    # Apply weights
+    y_weighted_all = y_iso_all * weights
+
+    # Accumulate into map
+    y_map = np.zeros(npix, dtype=float)
+    np.add.at(y_map, pixel_indices_flat, y_weighted_all)
+
+    return y_map
+
+
+def paint_y_chunked(
+    halo_theta: np.ndarray,
+    halo_phi: np.ndarray,
+    M_halos: np.ndarray,
+    particle_counts: np.ndarray,
+    interpolator: BattagliaLogInterpolator,
+    z: float = Z,
+    nside: int = NSIDE,
+    N: float = 4.0,
+    nbins: int = 20,
+    chunk_size: int = 50,
+    use_weights: bool = True,
+):
+    """
+    Paint y-map in chunks to reduce memory usage.
+    1. Build KDTree of pixels.
+    2. For each chunk of halos:
+       a. Query tree for pixels within N×θ_200.
+       b. Compute weights.
+       c. Interpolate y-values.
+       d. Accumulate into y-map.
+    3. Return final y-map.
+    """
+    tree, pix_xyz, pix_indices = build_tree(nside)
+    npix = len(pix_indices)
+    y_map = np.zeros(npix, dtype=float)
+
+    N_halos = len(M_halos)
+    n_chunks = (N_halos + chunk_size - 1) // chunk_size
+
+    print(f"Processing {N_halos} halos in {n_chunks} chunks of {chunk_size}...")
+
+    for chunk_idx in range(n_chunks):
+        start_idx = chunk_idx * chunk_size
+        end_idx = min(start_idx + chunk_size, N_halos)
+
+        # Process chunk
+        halo_xyz_chunk = convert_rad_to_cart(
+            halo_theta[start_idx:end_idx], halo_phi[start_idx:end_idx]
+        )
+        M_chunk = M_halos[start_idx:end_idx]
+        theta_200_chunk = compute_theta_200(MODEL, M_chunk, Z=z, delta=200)
+
+        # Query and paint chunk
+        (
+            pixel_indices_flat,
+            distances_flat,
+            halo_starts,
+            halo_counts,
+            _,
+        ) = query_tree(
+            halo_xyz=halo_xyz_chunk,
+            theta_200=theta_200_chunk,
+            particle_tree=tree,
+            particle_xyz=pix_xyz,
+            N=N,
+        )
+
+        if len(pixel_indices_flat) == 0:
+            continue
+
+        # TEST: Switchable Compute weights 
+        if use_weights:
+            weights = weigh_particle_contr(
+                pixel_indices=pixel_indices_flat,
+                distances=distances_flat,
+                halo_starts=halo_starts,
+                halo_counts=halo_counts,
+                theta_200=theta_200_chunk,
+                particle_counts=particle_counts,
+                N=N,
+                nbins=nbins,
+            )
         else:
-            mean_counts[b] = 0.0
+            weights = np.ones(len(pixel_indices_flat), dtype=np.float64)
 
-    w_h = np.ones_like(thetas)
-    for b in range(nbins):
-        in_bin = bin_ids == b
-        if not np.any(in_bin):
-            w_h[in_bin] = 0.0
-        m = mean_counts[b]
-        if m > 0.0:
-            w_h[in_bin] = counts[in_bin] / m
-        else:
-            w_h[in_bin] = 1.0
+        # Interpolate
+        log_M_chunk = np.log10(M_chunk)
+        halo_indices_chunk = np.repeat(np.arange(len(M_chunk)), halo_counts)
+        
+        log_theta = np.log(distances_flat + 1e-40)
+        log_M = log_M_chunk[halo_indices_chunk]
+        z_arr = np.full_like(distances_flat, z, dtype=float)
 
-    return w_h
+        y_iso = interpolator.eval_for_logs(log_theta, z_arr, log_M)
+        y_weighted = y_iso * weights
 
+        # Accumulate
+        np.add.at(y_map, pixel_indices_flat, y_weighted)
+
+    return y_map
 
 
 def paint_y(
@@ -197,71 +382,46 @@ def paint_y(
     nside: int = NSIDE,
     N: float = 4.0,
     nbins: int = 20,
+    chunk_size: int = 100,
+    method: str = "vectorized",
+    use_weights: bool = True,
 ):
-    
-    tree, pix_xyz, pix_indices = build_tree(nside)
-    npix = len(pix_indices)
+    """
+    Paint tSZ y-parameter map.
 
-    
-    halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
-    theta_200 = compute_theta_200(MODEL, M_halos, Z=z, delta=200)
+    Parameters
+    method : str
+        "vectorized" (default, faster) or "chunked" (memory-efficient).
+    use_weights : bool
+        If True (default), apply particle-count weighting for substructure.
+        If False, use uniform weights (XGPaint-like behavior).
 
-    
-    pixel_indices_flat, distances_flat, halo_start, halo_count = query_tree(
-        halo_xyz=halo_xyz,
-        theta_200=theta_200,
-        particle_tree=tree,
-        particle_xyz=pix_xyz,
-        N=N,
+    Returns
+    y_map : np.ndarray
+        HEALPix map with y-parameter values
+    """
+    if method == "chunked":
+        return paint_y_chunked(
+            halo_theta, halo_phi, M_halos, particle_counts,
+            interpolator, z, nside, N, nbins, chunk_size, use_weights
+        )
+
+    return paint_y_vectorized(
+        halo_theta, halo_phi, M_halos, particle_counts,
+        interpolator, z, nside, N, nbins, use_weights
     )
-    
-    weights = weigh_particle_contr(
-        pixel_indices=pixel_indices_flat,
-        distances=distances_flat,
-        halo_start=halo_start,
-        halo_count=halo_count,
-        theta_200=theta_200,
-        particle_counts=particle_counts,
-        N=N,
-        nbins=nbins,
-    )
-    # Painting 
-    y_map = np.zeros(npix, dtype=float)
-    N_halos = len(M_halos)
-
-    for h in range(N_halos):
-        start = halo_start[h]
-        count = halo_count[h]
-        if count == 0:
-            continue
-
-        sl = slice(start, start + count)
-        pix_idx_h = pixel_indices_flat[sl]
-        theta_h = distances_flat[sl]
-        w_h = weights[sl]
-
-        log_theta_h = np.log(theta_h + 1e-40)
-        log_M_h = np.full_like(theta_h, np.log10(M_halos[h]), dtype=float)
-        z_h = np.full_like(theta_h, z, dtype=float)
-
-        y_iso_h = interpolator.eval_for_logs(log_theta_h, z_h, log_M_h)
-        y_pix_h = y_iso_h * w_h
-
-        y_map[pix_idx_h] += y_pix_h
-
-    return y_map
 
 
 def main():
-    halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(NSIDE, np.arange(hp.nside2npix(NSIDE)))
-
     npix = hp.nside2npix(NSIDE)
+    halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(npix, np.arange(npix))
+
     _, _, particle_counts = create_mock_particle_data(npix, np.arange(npix))
     particle_counts = np.array(particle_counts, dtype=int)
 
     interpolator = load_interpolator(JAX_PATH)
 
-    # Paint 
+    print(f"Painting tSZ signal using '{PAINT_METHOD}' method...")
     y_map = paint_y(
         halo_theta=halo_theta,
         halo_phi=halo_phi,
@@ -271,21 +431,21 @@ def main():
         z=Z,
         nside=NSIDE,
     )
+
+    print(f"\nMap statistics:")
+    print(f"  Min: {y_map.min():.3e}")
+    print(f"  Max: {y_map.max():.3e}")
+    print(f"  Mean: {y_map.mean():.3e}")
+    print(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
+
     hp.write_map("y_map.fits", y_map, overwrite=True)
+
+    import matplotlib.pyplot as plt
+    hp.mollview(y_map, title="tSZ y-map", unit="y", norm="log", min=1e-12)
+    hp.graticule()
+    plt.savefig("y_map.png", dpi=200, bbox_inches="tight")
+    print("Saved visualization to y_map.png")
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
