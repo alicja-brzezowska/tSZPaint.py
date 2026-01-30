@@ -12,16 +12,15 @@ wheels/
 # Virtual environments
 .venv
 
-# Data files (large)
-data/interpolators/
+# Data files (large) - interpolators tracked via Git LFS
 data/*.jld2
 data/*.pkl
 data/*.fits
 data/*.png
 data/*.pdf
 *.tar.gz
-*.pkl
 *.fits
+# Note: data/interpolators/*.pkl tracked via Git LFS
 
 # Generated outputs
 benchmark_weights.csv
