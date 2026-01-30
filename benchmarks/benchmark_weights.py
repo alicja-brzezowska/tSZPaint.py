@@ -49,7 +49,7 @@ def benchmark_paint(
     """
     halo_theta, halo_phi, M_halos = create_mock_halo_catalog(n_halos)
 
-    # Silent warmup run (JIT compilation)
+
     _ = paint_y(
         halo_theta=halo_theta,
         halo_phi=halo_phi,
@@ -135,7 +135,6 @@ def main():
 
     print(f"\nResults saved to {output_file}")
 
-    # Print summary table
     print("\n" + "=" * 70)
     print(f"{'N Halos':>10} | {'Weighted (s)':>14} | {'Unweighted (s)':>14} | {'Overhead':>10}")
     print("-" * 70)

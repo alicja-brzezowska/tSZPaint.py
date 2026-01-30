@@ -12,6 +12,7 @@ from tszpaint.y_profile import (
 )
 from tszpaint.interpolator import BattagliaLogInterpolator
 from tszpaint.config import DATA_PATH, INTERPOLATORS_PATH
+from tszpaint.abacus_loader import load_abacus_for_painting
 
 # HEALPix
 NSIDE = 1024
@@ -25,10 +26,11 @@ Z = 0.5
 PAINT_METHOD = "vectorized"
 
 
-def read_asdf():
-    """Given the AbacusSummit ASDF file, find information."""
-    halo_cat = asdf.open(HALO_CATALOGS_PATH)
-    halo_cat.info()
+def reaf_asdf_healcounts():
+    """Read particle counts from AbacusSummit ASDF file."""
+    halo_file = asdf.open(HALO_CATALOGS_PATH)
+    m = halo_file["PartCounts/PartCounts_000"]
+    return m
 
 
 def create_mock_particle_data(NPIX, m):
@@ -145,12 +147,14 @@ def _compute_weights_numba(
 ):
     """
     Numba-optimized function to compute normalized weights for shells around halos.
+
+    Each halo is independent - writes to disjoint slices of output array.
+    Parallelized over halos via prange.
     """
     N_halos = len(theta_200)
     weights = np.ones_like(distances, dtype=np.float64)
     bin_edges = np.linspace(0.0, N, nbins + 1)
 
-    # Processing halos in parallel
     for h in prange(N_halos):
         start = halo_starts[h]
         count = halo_counts[h]
@@ -158,33 +162,33 @@ def _compute_weights_numba(
         if count == 0:
             continue
 
-        # Extract data for this halo
+        # Views into this halo's data
         theta_h = distances[start : start + count]
         w_h = raw_weights[start : start + count].copy()
 
-        # Compute radial coordinate
+        # Radial coordinate normalized by theta_200
         x_h = theta_h / theta_200[h]
 
-        # Assign to bins
+        # Bin assignment
         bin_ids = np.searchsorted(bin_edges[1:], x_h, side="left")
         bin_ids = np.minimum(bin_ids, nbins - 1)
 
-        # Count and sum per bin
+        # Histogram: count and sum per bin (scatter-add, must be sequential)
         bin_counts_h = np.zeros(nbins, dtype=np.float64)
         bin_sums_h = np.zeros(nbins, dtype=np.float64)
-
-        for i in range(len(w_h)):
+        for i in range(count):
             b = bin_ids[i]
             bin_counts_h[b] += 1.0
             bin_sums_h[b] += w_h[i]
 
-        # Compute normalization factors
-        for i in range(len(w_h)):
-            b = bin_ids[i]
-            if bin_sums_h[b] > 0:
-                w_h[i] *= bin_counts_h[b] / bin_sums_h[b]
+        # Normalization factors per bin (loop over nbins, typically 20)
+        norm_factors = np.ones(nbins, dtype=np.float64)
+        for b in range(nbins):
+            if bin_sums_h[b] > 0.0:
+                norm_factors[b] = bin_counts_h[b] / bin_sums_h[b]
 
-        weights[start : start + count] = w_h
+        # Apply normalization via gather (vectorized in Numba)
+        weights[start : start + count] = w_h * norm_factors[bin_ids]
 
     return weights
 
@@ -412,6 +416,78 @@ def paint_y(
     )
 
 
+def paint_abacus(
+    halo_dir,
+    healcounts_file,
+    output_file="y_map_abacus.fits",
+    nside=NSIDE,
+    interpolator_path=JAX_PATH,
+    method="vectorized",
+    use_weights=True,
+):
+    """
+    Paint tSZ y-map from real Abacus simulation data.
+
+    Parameters
+    ----------
+    halo_dir : str or Path
+        Directory containing header.asdf and halo_info.asdf.
+    healcounts_file : str or Path
+        Path to the healcounts ASDF file.
+    output_file : str
+        Output FITS file path.
+    nside : int
+        HEALPix resolution.
+    interpolator_path : Path
+        Path to the Battaglia interpolator pickle.
+    method : str
+        "vectorized" or "chunked".
+    use_weights : bool
+        Whether to use particle-count weighting.
+
+    Returns
+    -------
+    y_map : np.ndarray
+        The painted y-parameter HEALPix map.
+    """
+    print(f"Loading Abacus data from {halo_dir}...")
+    halo_theta, halo_phi, M_halos, particle_counts, redshift = load_abacus_for_painting(
+        halo_dir=halo_dir,
+        healcounts_file=healcounts_file,
+        nside=nside,
+    )
+
+    print(f"Loaded {len(M_halos)} halos at z={redshift:.3f}")
+    print(f"Mass range: {M_halos.min():.2e} - {M_halos.max():.2e} Msun")
+
+    interpolator = load_interpolator(interpolator_path)
+
+    print(f"Painting y-map with method='{method}', use_weights={use_weights}...")
+    y_map = paint_y(
+        halo_theta=halo_theta,
+        halo_phi=halo_phi,
+        M_halos=M_halos,
+        particle_counts=particle_counts,
+        interpolator=interpolator,
+        z=redshift,
+        nside=nside,
+        method=method,
+        use_weights=use_weights,
+    )
+
+    print(f"\nMap statistics:")
+    print(f"  Min: {y_map.min():.3e}")
+    print(f"  Max: {y_map.max():.3e}")
+    print(f"  Mean: {y_map.mean():.3e}")
+    print(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
+
+    if output_file:
+        hp.write_map(output_file, y_map, overwrite=True)
+        print(f"Saved to {output_file}")
+
+    return y_map
+
+
 def main():
     npix = hp.nside2npix(NSIDE)
     halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(npix, np.arange(npix))
@@ -421,7 +497,6 @@ def main():
 
     interpolator = load_interpolator(JAX_PATH)
 
-    print(f"Painting tSZ signal using '{PAINT_METHOD}' method...")
     y_map = paint_y(
         halo_theta=halo_theta,
         halo_phi=halo_phi,
@@ -444,7 +519,6 @@ def main():
     hp.mollview(y_map, title="tSZ y-map", unit="y", norm="log", min=1e-12)
     hp.graticule()
     plt.savefig("y_map.png", dpi=200, bbox_inches="tight")
-    print("Saved visualization to y_map.png")
 
 
 if __name__ == "__main__":
