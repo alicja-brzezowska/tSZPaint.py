@@ -3,6 +3,7 @@ import healpy as hp
 from scipy.spatial import cKDTree
 from numba import jit, prange
 import asdf
+import matplotlib.pyplot as plt
 
 from tszpaint.y_profile import (
     Battaglia16ThermalSZProfile,
@@ -11,24 +12,26 @@ from tszpaint.y_profile import (
     angular_size,
 )
 from tszpaint.interpolator import BattagliaLogInterpolator
-from tszpaint.config import DATA_PATH, INTERPOLATORS_PATH
+from tszpaint.config import DATA_PATH, ABACUS_DATA_PATH, INTERPOLATORS_PATH, HALO_CATALOGS_DATA_PATH, HEALCOUNTS_DATA_PATH
 from tszpaint.abacus_loader import load_abacus_for_painting
 
 # HEALPix
-NSIDE = 1024
+NSIDE = 8192
 
 MODEL = create_battaglia_profile()
 PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
 JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
 JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
-HALO_CATALOGS_PATH = DATA_PATH / "file_name"
+HALO_CATALOGS_PATH = HALO_CATALOGS_DATA_PATH / "halo_info_000.asdf"  
+HEALCOUNTS_PATH = HEALCOUNTS_DATA_PATH / "LightCone0_halo_heal-counts_Step0628-0634.asdf"
+
 Z = 0.5
 PAINT_METHOD = "vectorized"
 
 
 def reaf_asdf_healcounts():
     """Read particle counts from AbacusSummit ASDF file."""
-    halo_file = asdf.open(HALO_CATALOGS_PATH)
+    halo_file = asdf.open(HEALCOUNTS_PATH)
     m = halo_file["PartCounts/PartCounts_000"]
     return m
 
@@ -145,12 +148,7 @@ def _compute_weights_numba(
     N: float,
     nbins: int,
 ):
-    """
-    Numba-optimized function to compute normalized weights for shells around halos.
 
-    Each halo is independent - writes to disjoint slices of output array.
-    Parallelized over halos via prange.
-    """
     N_halos = len(theta_200)
     weights = np.ones_like(distances, dtype=np.float64)
     bin_edges = np.linspace(0.0, N, nbins + 1)
@@ -489,36 +487,28 @@ def paint_abacus(
 
 
 def main():
-    npix = hp.nside2npix(NSIDE)
-    halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(npix, np.arange(npix))
-
-    _, _, particle_counts = create_mock_particle_data(npix, np.arange(npix))
-    particle_counts = np.array(particle_counts, dtype=int)
-
-    interpolator = load_interpolator(JAX_PATH)
-
-    y_map = paint_y(
-        halo_theta=halo_theta,
-        halo_phi=halo_phi,
-        M_halos=M_halos,
-        particle_counts=particle_counts,
-        interpolator=interpolator,
-        z=Z,
+    # Run actual Abacus painting
+    halo_dir = ABACUS_DATA_PATH / "halos" / "z0.625"
+    healcounts_file = HEALCOUNTS_DATA_PATH / "LightCone0_halo_heal-counts_Step0628-0634.asdf"
+    output_file = "y_map_abacus.fits"
+    
+    print(f"Painting Abacus tSZ map...")
+    print(f"Halo directory: {halo_dir}")
+    print(f"Healcounts file: {healcounts_file}")
+    print(f"Output file: {output_file}")
+    
+    y_map = paint_abacus(
+        halo_dir=str(halo_dir),
+        healcounts_file=str(healcounts_file),
+        output_file=output_file,
         nside=NSIDE,
     )
-
-    print(f"\nMap statistics:")
-    print(f"  Min: {y_map.min():.3e}")
-    print(f"  Max: {y_map.max():.3e}")
-    print(f"  Mean: {y_map.mean():.3e}")
-    print(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
-
-    hp.write_map("y_map.fits", y_map, overwrite=True)
-
-    import matplotlib.pyplot as plt
-    hp.mollview(y_map, title="tSZ y-map", unit="y", norm="log", min=1e-12)
+    
+    # Also create a visualization
+    hp.mollview(y_map, title="Abacus tSZ y-map", unit="y", norm="log", min=1e-12)
     hp.graticule()
-    plt.savefig("y_map.png", dpi=200, bbox_inches="tight")
+    plt.savefig("y_map_abacus.png", dpi=200, bbox_inches="tight")
+    print("Saved visualization to y_map_abacus.png")
 
 
 if __name__ == "__main__":

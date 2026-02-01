@@ -19,8 +19,8 @@ def comoving_to_sky(x, y, z):
 
 def load_abacus_halos(
     dirpath,
-    header_file="header.asdf",
-    data_file="halo_info.asdf",
+    header_file="header",
+    data_file="halo_info/halo_info_000.asdf",
 ):
     """
     Load the Abacus halo catalog files, obtain halo positions from the halo_info file 
@@ -28,8 +28,36 @@ def load_abacus_halos(
     """
     dirpath = Path(dirpath)
 
-    with asdf.open(dirpath / header_file) as f:
-        header = dict(f["header"]) if "header" in f else dict(f.tree)
+    # Read header as text file with key=value pairs
+    header = {}
+    with open(dirpath / header_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                # Try to convert to appropriate type
+                try:
+                    # Remove quotes if present
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    elif value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    # Try int
+                    if '.' not in value and 'e' not in value.lower():
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            pass
+                    else:
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            pass
+                except:
+                    pass
+                header[key] = value
 
     with asdf.open(dirpath / data_file) as f:
         data = f["data"] if "data" in f else f.tree
@@ -40,14 +68,14 @@ def load_abacus_halos(
     return pos, N_particles, SO_radius, header
 
 
-def load_abacus_healcounts(filepath, key="PartCounts/PartCounts_000"):
+def load_abacus_healcounts(filepath, key="data/heal-counts"):
     
     """
     Load the healpix map with particle counts from the Heal_counts files.
     """
     with asdf.open(filepath) as f:
         header = dict(f["header"]) if "header" in f else {}
-        particle_counts = np.array(f[key][:])
+        particle_counts = np.array(f['data'][key][:])
     return particle_counts, header
 
 
@@ -70,13 +98,13 @@ def halos_to_sky(halo_pos, N_particles, header, nside=8192):
 def load_abacus_for_painting(
     halo_dir,
     healcounts_file,
-    header_file="header.asdf",
-    data_file="halo_info.asdf",
-    healcounts_key="PartCounts/PartCounts_000",
+    header_file="header",
+    data_file="halo_info/halo_info_000.asdf",
+    healcounts_key="heal-counts",
     nside=8192,
 ):
     """
-    Prepare halo catalog and particle counts for painting from AbacusSummit data.
+    Prepare halo catalog and particle counts for painting from AbacusSummit. 
     """
     pos, N_particles, SO_radius, header = load_abacus_halos(
         halo_dir, header_file, data_file
