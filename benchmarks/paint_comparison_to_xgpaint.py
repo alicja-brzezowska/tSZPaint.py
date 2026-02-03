@@ -4,16 +4,14 @@ import time
 from pathlib import Path
 
 from tszpaint.paint import (
-    paint_y_vectorized,
-    create_mock_halo_catalogs,
-    create_mock_particle_data,
+    paint_y_chunked,
     load_interpolator,
 )
 from tszpaint.config import DATA_PATH, INTERPOLATORS_PATH
 
 # Configuration
-NSIDE = 1024
-N_HALOS = 1000
+NSIDE = 2048
+N_HALOS = 10000
 Z = 0.5
 SEED = 42
 OUTPUT_DIR = DATA_PATH / "comparison_output"
@@ -21,7 +19,6 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 def create_catalog():
-    """Create reproducible mock catalog."""
     rng = np.random.default_rng(SEED)
     
     # Halos
@@ -52,8 +49,8 @@ def create_catalog():
 
 
 def paint_python(catalog, use_weights=True):
-    """Paint with tszpaint."""
-    mode = "no weights" if use_weights else "weights"
+    """Paint with tszpaint"""
+    mode = "weights" if use_weights else "no weights"
     print("\n" + "="*60)
     print(f"TSZpaint - {mode}")
     print("="*60)
@@ -61,7 +58,7 @@ def paint_python(catalog, use_weights=True):
     interpolator = load_interpolator(INTERPOLATORS_PATH / "y_values_jax_2.pkl")
 
     t0 = time.perf_counter()
-    y_map = paint_y_vectorized(
+    y_map = paint_y_chunked(
         halo_theta=catalog['halo_theta'],
         halo_phi=catalog['halo_phi'],
         M_halos=catalog['masses'],
@@ -88,7 +85,6 @@ def paint_python(catalog, use_weights=True):
 
 
 def save_for_julia(catalog, python_time=None):
-    """Save catalog for Julia script."""
     save_dict = {
         'ra': catalog['ra'],
         'dec': catalog['dec'],
