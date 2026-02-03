@@ -61,7 +61,7 @@ def load_abacus_healcounts(filepath, key="data/heal-counts"):
 
 
 
-def load_data_for_painting(
+def load_abacus_for_painting(
     halo_dir,
     healcounts_file,
     header_file="header",

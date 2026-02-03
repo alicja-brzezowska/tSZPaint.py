@@ -23,13 +23,13 @@ def linspace_from_julia_obj(julia_obj: dict[str, float | int]):
     return np.linspace(
         julia_obj["start"],
         julia_obj["stop"],
-        julia_obj["len"],  
+        julia_obj["len"],
     )
 
 @dataclass
 class BattagliaLogInterpolator:
     interpolator: Callable
-    use_jax: bool 
+    use_jax: bool
 
     @classmethod
     def from_matrices(
@@ -57,16 +57,16 @@ class BattagliaLogInterpolator:
         if use_jax:
             lists = (jnp.asarray(log_thetas), jnp.asarray(redshifts), jnp.asarray(log_masses))
             log_prof_y = jnp.asarray(log_prof_y)
-            interpolator = RegularGridInterpolator(lists, 
-                                          log_prof_y, 
+            interpolator = RegularGridInterpolator(lists,
+                                          log_prof_y,
                                           method = "linear",
                                           bounds_error = False,
                                           fill_value = None)
 
         else:
             lists = (log_thetas, redshifts, log_masses)
-            interpolator = RegularGridInterpolator( lists, 
-                                          log_prof_y, 
+            interpolator = RegularGridInterpolator( lists,
+                                          log_prof_y,
                                           method = "linear",
                                           bounds_error = False,
                                           fill_value = None)
@@ -117,7 +117,7 @@ class BattagliaLogInterpolator:
 
     def eval_for_logs(self, log_theta, z, log_M):
         if self.use_jax:
-            lists = jnp.stack([log_theta, z, log_M], axis = -1) 
+            lists = jnp.stack([log_theta, z, log_M], axis = -1)
             log_y = self.interpolator(lists)
             return jnp.exp(log_y)
         else:
@@ -132,11 +132,8 @@ class BattagliaLogInterpolator:
             log_y = self.interpolator(lists)
             return jnp.exp(log_y)
 
-        else: 
+        else:
             log_theta = np.log(theta)
             log_M = np.log10(m)
             log_y = self.interpolator((log_theta, z, log_M))
             return np.exp(log_y)
-    
-
-

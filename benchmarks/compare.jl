@@ -29,7 +29,9 @@ model = XGPaint.Battaglia16ThermalSZProfile(
 # Create map and workspace
 res = Resolution(nside)
 m = HealpixMap{Float64, RingOrder}(nside)
-workspace = XGPaint.HealpixRingProfileWorkspace(res)
+workspace = XGPaint.HealpixProfileWorkspace(nside, 0.1)  
+
+
 
 # Paint
 t0 = time()
