@@ -1,6 +1,6 @@
 import asdf
 from pathlib import Path
-from config import HALO_CATALOGS_DATA_PATH, HEALCOUNTS_DATA_PATH
+from config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 
 def inspect_file(filepath, name):
 
@@ -28,9 +28,9 @@ def inspect_file(filepath, name):
             print("Could not read file")
 
 def main():
-    header_file = HALO_CATALOGS_DATA_PATH.parent / "header"
-    halo_catalog_file = HALO_CATALOGS_DATA_PATH / "halo_info_000.asdf"
-    healcounts_file = HEALCOUNTS_DATA_PATH / "LightCone0_halo_heal-counts_Step0628-0634.asdf"
+    header_file = HALO_CATALOGS_PATH.parent / "header"
+    halo_catalog_file = HALO_CATALOGS_PATH / "halo_info_000.asdf"
+    healcounts_file = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0628-0634.asdf"
 
     inspect_file(header_file, "Abacus Header File")
     inspect_file(halo_catalog_file, "Abacus Halo Catalog File")

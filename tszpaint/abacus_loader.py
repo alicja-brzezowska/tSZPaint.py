@@ -8,114 +8,81 @@ def comoving_to_sky(x, y, z):
     """
     Convert comoving box coordinates to healpix sky coordinates.
     Abacus has the origin at the center of the box.
-
     """
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(np.clip(z / r, -1.0, 1.0))
-    phi = np.arctan2(y, x)
-    phi = np.where(phi < 0, phi + 2 * np.pi, phi)
+    phi = np.arctan2(y, x) # better than arctan(y/x), as distinguishes quadrants 
+    phi = np.where(phi < 0, phi + 2 * np.pi, phi) # [condition, value if true, value if false]
+    # ensures phi is in [0, 2pi]
     return theta, phi
 
 
-def load_abacus_halos(
-    dirpath,
-    header_file="header",
-    data_file="halo_info/halo_info_000.asdf",
-):
-    """
-    Load the Abacus halo catalog files, obtain halo positions from the halo_info file 
-    and simulation information from the header file.
-    """
-    dirpath = Path(dirpath)
+def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
 
-    # Read header as text file with key=value pairs
-    header = {}
-    with open(dirpath / header_file, 'r') as f:
+    wanted = set(wanted)
+    out = {}
+    with open(header_path, "r") as f:
         for line in f:
-            line = line.strip()
-            if '=' in line and not line.startswith('#'):
-                key, value = line.split('=', 1)
-                key = key.strip()
-                value = value.strip()
-                # Try to convert to appropriate type
-                try:
-                    # Remove quotes if present
-                    if value.startswith('"') and value.endswith('"'):
-                        value = value[1:-1]
-                    elif value.startswith("'") and value.endswith("'"):
-                        value = value[1:-1]
-                    # Try int
-                    if '.' not in value and 'e' not in value.lower():
-                        try:
-                            value = int(value)
-                        except ValueError:
-                            pass
-                    else:
-                        try:
-                            value = float(value)
-                        except ValueError:
-                            pass
-                except:
-                    pass
-                header[key] = value
+            if "=" not in line or line.startswith("#"):
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            if k not in wanted:
+                continue
+            v = v.strip()
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            out[k] = float(v)
+            if len(out) == len(wanted):
+                break
+    return out    
 
-    with asdf.open(dirpath / data_file) as f:
-        data = f["data"] if "data" in f else f.tree
-        pos = np.array(data["x_L2com"][:])
-        N_particles = np.array(data["N"][:])
-        SO_radius = np.array(data["SO_radius"][:])
 
-    return pos, N_particles, SO_radius, header
+
+def load_abacus_halos(
+    halo_dir, data_file="halo_info/halo_info_000.asdf",
+):
+    halo_dir = Path(halo_dir)
+    with asdf.open(halo_dir / data_file, copy_arrays=False) as af:
+        d = af["data"]
+        positions = np.asarray(d["x_L2com"])
+        N_particles  = np.asarray(d["N"])
+        R200 = np.asarray(d["SO_radius"])
+    return positions, N_particles, R200
+
 
 
 def load_abacus_healcounts(filepath, key="data/heal-counts"):
     
-    """
-    Load the healpix map with particle counts from the Heal_counts files.
-    """
     with asdf.open(filepath) as f:
         header = dict(f["header"]) if "header" in f else {}
         particle_counts = np.array(f['data'][key][:])
     return particle_counts, header
 
 
-def halos_to_sky(halo_pos, N_particles, header, nside=8192):
 
-    """Convert an Abacus halo catalog to sky coordinates using its header."""
-
-    particle_mass = header["ParticleMassMsun"]
-    redshift = header["Redshift"]
-
-    x, y, z = halo_pos[:, 0], halo_pos[:, 1], halo_pos[:, 2]
-    theta, phi = comoving_to_sky(x, y, z)
-
-    M_halos = N_particles.astype(np.float64) * particle_mass
-    halo_pixels = hp.ang2pix(nside, theta, phi)
-
-    return theta, phi, M_halos, redshift, halo_pixels
-
-
-def load_abacus_for_painting(
+def load_data_for_painting(
     halo_dir,
     healcounts_file,
     header_file="header",
-    data_file="halo_info/halo_info_000.asdf",
-    healcounts_key="heal-counts",
-    nside=8192,
+    nside=1024,
+    return_pixels=False,
 ):
-    """
-    Prepare halo catalog and particle counts for painting from AbacusSummit. 
-    """
-    pos, N_particles, SO_radius, header = load_abacus_halos(
-        halo_dir, header_file, data_file
-    )
+    pos, N_particles, SO_radius = load_abacus_halos(halo_dir)
 
-    halo_theta, halo_phi, M_halos, redshift, _ = halos_to_sky(
-        pos, N_particles, header, nside
-    )
+    h = load_abacus_header(Path(halo_dir) / header_file, wanted=("ParticleMassMsun", "Redshift"))
+    particle_mass = h["ParticleMassMsun"]
+    redshift = h["Redshift"]
 
-    particle_counts, _ = load_abacus_healcounts(healcounts_file, healcounts_key)
+    x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
+    theta, phi = comoving_to_sky(x, y, z)
 
-    return halo_theta, halo_phi, M_halos, particle_counts, redshift
+    M_halos = N_particles.astype(np.float64) * particle_mass
+    particle_counts, _ = load_abacus_healcounts(healcounts_file)
 
+    if return_pixels:
+        halo_pixels = hp.ang2pix(nside, theta, phi)
+        return theta, phi, M_halos, particle_counts, redshift, halo_pixels
+
+    return theta, phi, M_halos, particle_counts, redshift
 
