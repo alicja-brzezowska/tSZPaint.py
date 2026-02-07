@@ -15,24 +15,22 @@ def inspect_file(filepath, name):
             print(f"ASDF file with top-level keys: {list(tree.keys())}")
             for key in tree.keys():
                 data = tree[key]
-                if key == 'data' and isinstance(data, dict):
+                if key == 'header' and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
-    except:
-        try:
+                elif key == 'halo_lightcone' and isinstance(data, dict):
+                    print(f"  {key}: dict with keys: {list(data.keys())}")
+
+    except Exception as e:
             with open(filepath, 'r') as f:
                 lines = f.readlines()
                 print("Text file, full content:")
                 for line in lines:
                     print(f"  {line.strip()}")
-        except:
-            print("Could not read file")
 
 def main():
-    header_file = HALO_CATALOGS_PATH.parent / "header"
-    halo_catalog_file = HALO_CATALOGS_PATH / "halo_info_000.asdf"
+    halo_catalog_file = HALO_CATALOGS_PATH / "lightcone_halo_info_000.asdf"
     healcounts_file = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0628-0634.asdf"
 
-    inspect_file(header_file, "Abacus Header File")
     inspect_file(halo_catalog_file, "Abacus Halo Catalog File")
     inspect_file(healcounts_file, "Abacus HEALPix Particle Counts File")
 

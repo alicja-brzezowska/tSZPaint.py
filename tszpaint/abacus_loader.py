@@ -19,6 +19,8 @@ def comoving_to_sky(x, y, z):
 
 def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
 
+    """Not in use; does not work with the lightcone data format."""
+
     wanted = set(wanted)
     out = {}
     with open(header_path, "r") as f:
@@ -43,12 +45,16 @@ def load_abacus_halos(
     halo_dir, data_file="halo_info/halo_info_000.asdf",
 ):
     halo_dir = Path(halo_dir)
-    with asdf.open(halo_dir / data_file, copy_arrays=False) as af:
-        d = af["data"]
-        positions = np.asarray(d["x_L2com"])
-        N_particles  = np.asarray(d["N"])
-        R200 = np.asarray(d["SO_radius"])
-    return positions, N_particles, R200
+    with asdf.open(halo_dir / data_file) as af:
+        d = af["halo_lightcone"]
+        positions = np.asarray(d["Interpolated_x_L2com"])
+        N_particles  = np.asarray(d["Interpolated_N"])
+
+        h = af["header"]
+        particle_mass = h["ParticleMassHMsun"]
+        redshift = h["Redshift"]
+
+    return positions, N_particles, particle_mass, redshift
 
 
 
@@ -64,15 +70,10 @@ def load_abacus_healcounts(filepath, key="data/heal-counts"):
 def load_abacus_for_painting(
     halo_dir,
     healcounts_file,
-    header_file="header",
     nside=1024,
     return_pixels=False,
 ):
-    pos, N_particles, SO_radius = load_abacus_halos(halo_dir)
-
-    h = load_abacus_header(Path(halo_dir) / header_file, wanted=("ParticleMassMsun", "Redshift"))
-    particle_mass = h["ParticleMassMsun"]
-    redshift = h["Redshift"]
+    pos, N_particles, particle_mass, redshift = load_abacus_halos(halo_dir)
 
     x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
     theta, phi = comoving_to_sky(x, y, z)

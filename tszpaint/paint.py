@@ -27,7 +27,7 @@ MODEL = create_battaglia_profile()
 PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
 JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
 JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
-HALO_CATALOGS_FILE_PATH = HALO_CATALOGS_PATH / "halo_info_000.asdf"  
+HALO_CATALOGS_FILE_PATH = HALO_CATALOGS_PATH / "lightcone_halo_info_000.asdf"  
 HEALCOUNTS_FILE_PATH = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0635-0640.asdf"
 
 PAINT_METHOD = "vectorized"
@@ -469,7 +469,7 @@ def paint_abacus(
 
     interpolator = load_interpolator(interpolator_path)
 
-    print(f"Painting y-map with method='{method}', use_weights={use_weights}...")
+    print(f"Painting y-map ...")
     y_map = paint_y_mock_data(
         halo_theta=halo_theta,
         halo_phi=halo_phi,
@@ -496,16 +496,16 @@ def paint_abacus(
 
 
 def main():
-    halo_dir = ABACUS_DATA_PATH / "halos" / "z0.625"
-    healcounts_file = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0635-0640.asdf"
+    halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
+    healcounts_file = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
     output_file = "y_map_abacus.fits"
     
-    #print(f"Painting Abacus tSZ map...")
-    #print(f"Halo directory: {halo_dir}")
-    #print(f"Healcounts file: {healcounts_file}")
-    #print(f"Output file: {output_file}")
+    print(f"Painting Abacus tSZ map...")
+    print(f"Halo directory: {halo_dir}")
+    print(f"Healcounts file: {healcounts_file}")
+    print(f"Output file: {output_file}")
 
-    interpolator = load_interpolator(PYTHON_PATH)
+    interpolator = load_interpolator(JAX_PATH)
     redshift = 0.625
     nside = 2048
     method = "vectorized"
@@ -514,7 +514,7 @@ def main():
     _, _, particle_counts = create_mock_particle_data(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
 
 
-    y_map = paint_y_mock_data(
+    y_map_mock = paint_y_mock_data(
         halo_theta=halo_theta,
         halo_phi=halo_phi,
         M_halos=M_halos,
@@ -525,20 +525,20 @@ def main():
         method=method,
         use_weights=use_weights,
         verbose=True,
-    )
+    ) 
     
-    """ y_map = paint_abacus(
+    y_map = paint_abacus(
         halo_dir=str(halo_dir),
         healcounts_file=str(healcounts_file),
         output_file=output_file,
-        method="chunked", 
+        method="vectorized", 
         nside=NSIDE,
-    )"""
+    )
 
-    hp.mollview(y_map, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
+    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
     hp.graticule()
-    plt.savefig("y_map_abacus.png", dpi=200, bbox_inches="tight")
-    print("Saved visualization to y_map_abacus.png")
+    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
+    print("Saved visualization to y_map_abacus_mock.png")
 
 
 if __name__ == "__main__":
