@@ -8,6 +8,7 @@ import math
 import time
 import psutil
 import os
+import matplotlib.pyplot as plt
 
 from tszpaint.y_profile import (
     Battaglia16ThermalSZProfile,
@@ -20,15 +21,16 @@ from tszpaint.config import DATA_PATH, ABACUS_DATA_PATH, INTERPOLATORS_PATH, HAL
 from tszpaint.abacus_loader import load_abacus_for_painting
 
 # HEALPix
-NSIDE = 1024
+NSIDE = 8192 
 Z = 0.5 # FOR MOCK DATA
+N = 2 # Multiple of theta_200 to search 
+nbins = 20 # NOTE: THINK how many bins! 
 
 MODEL = create_battaglia_profile()
 PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
 JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
 JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
-HALO_CATALOGS_FILE_PATH = HALO_CATALOGS_PATH / "lightcone_halo_info_000.asdf"  
-HEALCOUNTS_FILE_PATH = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0635-0640.asdf"
+
 
 PAINT_METHOD = "vectorized"
 
@@ -98,7 +100,7 @@ def build_tree(nside=NSIDE):
     """
     npix = hp.nside2npix(nside)
     pix_indices = np.arange(npix)
-    theta, phi = hp.pix2ang(nside, pix_indices)
+    theta, phi = hp.pix2ang(nside, pix_indices, nest=True)
     pix_xyz = convert_rad_to_cart(theta, phi)
     tree = cKDTree(pix_xyz)
     return tree, pix_xyz, pix_indices # NOTE: do i need pix_xyz?
@@ -109,7 +111,6 @@ def query_tree(
     theta_200: np.ndarray,
     particle_tree: cKDTree,
     particle_xyz: np.ndarray,
-    N: int = 4,
 ):
     """
     Query the tree out to N times theta_200 to find which pixels belong to which halo.
@@ -148,20 +149,18 @@ def query_tree(
 @jit(nopython=True, parallel=True, cache=True)
 
 
-def compute_weights(
+def weights_mechanism(
     distances: np.ndarray,
     halo_starts: np.ndarray,
     halo_counts: np.ndarray,
     theta_200: np.ndarray,
     init_weights: np.ndarray, # weights based on particle counts
-    N: float,
-    nbins: int,
 ):
     """compute normalized weights for each particle contribution within halos."""
 
     N_halos = len(theta_200)
     weights = np.ones_like(distances, dtype=np.float64)
-    bin_edges = np.linspace(0.0, N, nbins + 1) 
+    bin_edges = np.linspace(0.0, float(N), nbins + 1) 
 
     for h in prange(N_halos):
         start = halo_starts[h]
@@ -200,15 +199,13 @@ def compute_weights(
     return weights
 
 
-def compute_initial_weights(
+def compute_weights(
     pixel_indices: np.ndarray,
     distances: np.ndarray,
     halo_starts: np.ndarray,
     halo_counts: np.ndarray,
     theta_200: np.ndarray,
     particle_counts: np.ndarray,
-    N: float = 4.0,
-    nbins: int = 20,
 ):
     """
     Calculate the proportional weights for pixels based on particle counts. 
@@ -216,8 +213,8 @@ def compute_initial_weights(
     counts = particle_counts[pixel_indices]
     init_weights = np.power(counts + 1e-10, 5.0 / 3.0) # propto N_particles^(5/3)
 
-    weights = compute_weights(
-        distances, halo_starts, halo_counts, theta_200, init_weights, N, nbins
+    weights = weights_mechanism(
+        distances, halo_starts, halo_counts, theta_200, init_weights, 
     )
 
     return weights
@@ -231,8 +228,6 @@ def paint_y(
     interpolator: BattagliaLogInterpolator,
     z: float = Z,
     nside: int = NSIDE,
-    N: float = 4.0,
-    nbins: int = 20,
     use_weights: bool = True,
     verbose: bool = False,
 ):
@@ -256,22 +251,19 @@ def paint_y(
         theta_200=theta_200,
         particle_tree=tree,
         particle_xyz=pix_xyz,
-        N=N,
     )
     if verbose:
         t1 = _log(f"query_tree ({len(pix_in_halos):,} pixel-halo pairs)", t1)
 
     if use_weights:
         if verbose: t1 = time.perf_counter()
-        weights = compute_initial_weights(
+        weights = compute_weights(
             pixel_indices=pix_in_halos,
             distances=distances,
             halo_starts=halo_starts,
             halo_counts=halo_counts,
             theta_200=theta_200,
             particle_counts=particle_counts,
-            N=N,
-            nbins=nbins,
         )
         if verbose:
             t1 = _log("compute_weights", t1)
@@ -314,8 +306,6 @@ def paint_y_chunked(
     interpolator: BattagliaLogInterpolator,
     z: float = Z,
     nside: int = NSIDE,
-    N: float = 4.0,
-    nbins: int = 20,
     chunk_size: int = 100,
     use_weights: bool = True,
     verbose: bool = False,  # TIMING
@@ -360,7 +350,6 @@ def paint_y_chunked(
             theta_200=theta_200_chunk,
             particle_tree=tree,
             particle_xyz=pix_xyz,
-            N=N,
         )
         if verbose: total_query += time.perf_counter() - tq
 
@@ -371,15 +360,13 @@ def paint_y_chunked(
 
         if use_weights:
             if verbose: tw = time.perf_counter()
-            weights = compute_initial_weights(
+            weights = compute_weights(
                 pixel_indices=pix_in_halos,
                 distances=distances_flat,
                 halo_starts=halo_starts,
                 halo_counts=halo_counts,
                 theta_200=theta_200_chunk,
                 particle_counts=particle_counts,
-                N=N,
-                nbins=nbins,
             )
             if verbose: total_weight += time.perf_counter() - tw
         else:
@@ -427,8 +414,6 @@ def paint_y_mock_data(
     interpolator: BattagliaLogInterpolator,
     z: float = Z,
     nside: int = NSIDE,
-    N: float = 4.0,
-    nbins: int = 20,
     chunk_size: int = 1000,
     method: str = "vectorized",
     use_weights: bool = True,
@@ -440,13 +425,42 @@ def paint_y_mock_data(
     if method == "chunked":
         return paint_y_chunked(
             halo_theta, halo_phi, M_halos, particle_counts,
-            interpolator, z, nside, N, nbins, chunk_size, use_weights, verbose
+            interpolator, z, nside, chunk_size, use_weights, verbose
         )
 
     return paint_y(
         halo_theta, halo_phi, M_halos, particle_counts,
-        interpolator, z, nside, N, nbins, use_weights, verbose
+        interpolator, z, nside, use_weights, verbose
     )
+
+def plot_zoom(y_map, nside, outpng="y_map_zoom.png"):
+    """Zoom to brightest pixel."""
+    ipix = int(np.nanargmax(y_map))
+    theta, phi = hp.pix2ang(nside, ipix, nest=True)
+    lon = np.degrees(phi)
+    lat = 90.0 - np.degrees(theta)
+    
+    pix_arcmin = hp.nside2resol(nside, arcmin=True)
+    reso = pix_arcmin / 6.0
+    xsize = 4000
+    
+    plt.figure(figsize=(10, 10))
+    hp.gnomview(
+        np.log10(y_map + 1e-20),
+        rot=[lon, lat],
+        xsize=xsize,
+        reso=reso,
+        nest=True,
+        title=f"Zoomed (nside={nside})",
+        unit="log10(y)",
+        hold=True,
+    )
+    hp.graticule()
+    plt.savefig(outpng, dpi=250, bbox_inches="tight")
+    plt.close()
+    print(f"Saved: {outpng}")
+
+
 
 
 def paint_abacus(
@@ -489,8 +503,10 @@ def paint_abacus(
     print(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
 
     if output_file:
-        hp.write_map(output_file, y_map, overwrite=True)
+        hp.write_map(output_file, y_map, overwrite=True, nest=True)
         print(f"Saved to {output_file}")
+      
+        plot_zoom(y_map, nside, output_file.replace('.fits', '_zoom.png'))
 
     return y_map
 
@@ -505,28 +521,34 @@ def main():
     print(f"Healcounts file: {healcounts_file}")
     print(f"Output file: {output_file}")
 
-    interpolator = load_interpolator(JAX_PATH)
-    redshift = 0.625
-    nside = 2048
-    method = "vectorized"
-    use_weights = True
-    halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
-    _, _, particle_counts = create_mock_particle_data(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
+    #interpolator = load_interpolator(JAX_PATH)
+    #redshift = 0.625
+    #nside = 2048
+    #method = "vectorized"
+    #use_weights = True
+    #halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
+    #_, _, particle_counts = create_mock_particle_data(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
 
 
-    y_map_mock = paint_y_mock_data(
-        halo_theta=halo_theta,
-        halo_phi=halo_phi,
-        M_halos=M_halos,
-        particle_counts=particle_counts,
-        interpolator=interpolator,
-        z=Z,
-        nside=nside,
-        method=method,
-        use_weights=use_weights,
-        verbose=True,
-    ) 
+#    y_map_mock = paint_y_mock_data(
+#        halo_theta=halo_theta,
+#        halo_phi=halo_phi,
+#        M_halos=M_halos,
+#        particle_counts=particle_counts,
+#        interpolator=interpolator,
+#        z=Z,
+#        nside=nside,
+#        method=method,
+#        use_weights=use_weights,
+#        verbose=True,
+#    ) 
     
+#    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
+#    hp.graticule()
+#    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
+#    print("Saved visualization to y_map_abacus_mock.png")
+
+
     y_map = paint_abacus(
         halo_dir=str(halo_dir),
         healcounts_file=str(healcounts_file),
@@ -535,10 +557,10 @@ def main():
         nside=NSIDE,
     )
 
-    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
+    hp.mollview(y_map, title="tSZ y-map on real data ( z = 0.542)", unit="y", norm="log", min=1e-12, nest=True)
     hp.graticule()
-    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
-    print("Saved visualization to y_map_abacus_mock.png")
+    plt.savefig("y_map_abacus_real.png", dpi=200, bbox_inches="tight")
+    print("Saved visualization to y_map_abacus_real.png")
 
 
 if __name__ == "__main__":

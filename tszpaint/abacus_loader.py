@@ -42,28 +42,37 @@ def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
 
 
 def load_abacus_halos(
-    halo_dir, data_file="halo_info/halo_info_000.asdf",
+    halo_dir,
 ):
     halo_dir = Path(halo_dir)
-    with asdf.open(halo_dir / data_file) as af:
+    with asdf.open(halo_dir ) as af:
+        h = af["header"]
+        particle_mass = h["ParticleMassHMsun"]
+        redshift = h["Redshift"]
+
         d = af["halo_lightcone"]
         positions = np.asarray(d["Interpolated_x_L2com"])
         N_particles  = np.asarray(d["Interpolated_N"])
 
-        h = af["header"]
-        particle_mass = h["ParticleMassHMsun"]
-        redshift = h["Redshift"]
+        M_halo = N_particles.astype(np.float64) * particle_mass
+
+        # filter out low-mass halos for painting
+        positions = positions[M_halo > 10**13]
+        N_particles = N_particles[M_halo > 10**13]
+        M_halo = M_halo[M_halo > 10**13]
 
     return positions, N_particles, particle_mass, redshift
 
 
 
-def load_abacus_healcounts(filepath, key="data/heal-counts"):
+
+
+def load_abacus_healcounts(filepath):
     
     with asdf.open(filepath) as f:
-        header = dict(f["header"]) if "header" in f else {}
-        particle_counts = np.array(f['data'][key][:])
-    return particle_counts, header
+        #header = dict(f["headers"]) if "headers" in f else {} # or header_post 
+        particle_counts = np.array(f['data']['heal-counts'])
+    return particle_counts
 
 
 
@@ -79,7 +88,7 @@ def load_abacus_for_painting(
     theta, phi = comoving_to_sky(x, y, z)
 
     M_halos = N_particles.astype(np.float64) * particle_mass
-    particle_counts, _ = load_abacus_healcounts(healcounts_file)
+    particle_counts = load_abacus_healcounts(healcounts_file)
 
     if return_pixels:
         halo_pixels = hp.ang2pix(nside, theta, phi)
@@ -87,3 +96,11 @@ def load_abacus_for_painting(
 
     return theta, phi, M_halos, particle_counts, redshift
 
+import psutil
+from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
+
+halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
+
+positions, N_particles, pm, z = load_abacus_halos(halo_dir)
+mem_used = psutil.Process().memory_info().rss / 1e9  # GB
+print(f"Memory after loading: {mem_used:.2f} GB")
