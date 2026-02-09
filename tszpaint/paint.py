@@ -394,10 +394,10 @@ def paint_y_chunked(
             total_interp += t_prep + t_interp_only + t_accum
             # Log first chunk breakdown for insight
             if chunk_idx == 0:
-                print(f"  [chunk 0 breakdown] prep={t_prep:.3f}s, interp={t_interp_only:.3f}s, accum={t_accum:.3f}s")
+                print(f" [chunk 0 breakdown] prep={t_prep:.3f}s, interp={t_interp_only:.3f}s, accum={t_accum:.3f}s")
 
     if verbose:
-        print(f"  --- Timing ({n_chunks} chunks, {total_pixels:,} pixel-halo pairs) ---")
+        print(f"  Timing ({n_chunks} chunks, {total_pixels:,} pixel-halo pairs)")
         print(f"  query_tree:        {total_query:.3f}s")
         print(f"  compute_weights:   {total_weight:.3f}s")
         print(f"  interp+accumulate: {total_interp:.3f}s")
