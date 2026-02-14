@@ -15,6 +15,7 @@ from tszpaint.config import (
     HEALCOUNTS_PATH,
     INTERPOLATORS_PATH,
 )
+from tszpaint.converters import convert_cart_to_rad, convert_rad_to_cart
 from tszpaint.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile import (
     Battaglia16ThermalSZProfile,
@@ -50,15 +51,6 @@ def _log(msg, t0=None):
     else:
         print(f"  {msg} | mem: {mem:.0f} MB")
     return time.perf_counter()
-
-
-def convert_rad_to_cart(theta, phi):
-    """Given radial coordinates, convert to cartesian."""
-    x = np.sin(theta) * np.cos(phi)
-    y = np.sin(theta) * np.sin(phi)
-    z = np.cos(theta)
-    xyz = np.column_stack([x, y, z])
-    return xyz
 
 
 def compute_theta_200(
@@ -97,15 +89,6 @@ def angular_separation(theta1, phi1, theta2, phi2):
         + np.cos(theta1) * np.cos(theta2) * np.sin(dphi / 2) ** 2
     )
     return 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
-
-
-def convert_cart_to_rad(xyz):
-    """Given cartesian coordinates, convert to radial."""
-    x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
-    theta = np.arccos(np.clip(z, -1, 1))
-    phi = np.arctan2(y, x)
-    phi = np.where(phi < 0, phi + 2 * np.pi, phi)  # Ensure phi in [0, 2π]
-    return theta, phi
 
 
 def query_tree(
