@@ -1,3 +1,4 @@
 {
-    "reportExplicitAny": "none"
+    "reportExplicitAny": "none",
+    "reportUnusedCallResult": "none"
 }
