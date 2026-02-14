@@ -8,6 +8,8 @@ import jax.numpy as jnp
 import numpy as np
 from loguru import logger
 
+from tszpaint.decorators import timer
+
 DEBUG = True
 USE_JAX = True
 
@@ -99,6 +101,7 @@ class BattagliaLogInterpolator:
             np.array(data["prof_y"]),
         )
 
+    @timer
     def eval_for_logs(self, log_theta, z, log_M):
         if self.use_jax:
             lists = jnp.stack([log_theta, z, log_M], axis=-1)

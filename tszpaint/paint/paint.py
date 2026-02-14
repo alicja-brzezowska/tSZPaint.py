@@ -1,23 +1,21 @@
-import math
-import os
-import time
-
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-import psutil
+from loguru import logger
 from numba import jit, prange
-from scipy.spatial import cKDTree
 
-from tszpaint.abacus_loader import load_abacus_for_painting
 from tszpaint.config import (
     HALO_CATALOGS_PATH,
     HEALCOUNTS_PATH,
     INTERPOLATORS_PATH,
 )
-from tszpaint.converters import convert_cart_to_rad, convert_rad_to_cart
-from tszpaint.interpolator import BattagliaLogInterpolator
-from tszpaint.y_profile import (
+from tszpaint.converters import convert_rad_to_cart
+from tszpaint.decorators import timer
+from tszpaint.paint.abacus_loader import load_abacus_for_painting
+from tszpaint.paint.config import PainterConfig
+from tszpaint.paint.tree import build_tree, query_tree
+from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
+from tszpaint.y_profile.y_profile import (
     Battaglia16ThermalSZProfile,
     angular_size,
     compute_R_delta,
@@ -36,23 +34,6 @@ JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
 JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
 
 
-PAINT_METHOD = "vectorized"
-
-
-# NOTE: TIMING
-def _mem_mb():
-    return psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-
-
-def _log(msg, t0=None):
-    mem = _mem_mb()
-    if t0 is not None:
-        print(f"  {msg}: {time.perf_counter() - t0:.3f}s | mem: {mem:.0f} MB")
-    else:
-        print(f"  {msg} | mem: {mem:.0f} MB")
-    return time.perf_counter()
-
-
 def compute_theta_200(
     model: Battaglia16ThermalSZProfile,
     M_halos: np.ndarray,
@@ -66,75 +47,6 @@ def compute_theta_200(
 
 def load_interpolator(path=JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
-
-
-def build_tree(nside=NSIDE):
-    """
-    Build a 3D KDTree of HEALPix pixels.
-    Need to convert to cartesian coordinates; as no angular KDTree in scipy.
-    """
-    npix = hp.nside2npix(nside)
-    pix_indices = np.arange(npix)
-    theta, phi = hp.pix2ang(nside, pix_indices, nest=True)
-    pix_xyz = convert_rad_to_cart(theta, phi)
-    tree = cKDTree(pix_xyz)
-    return tree, pix_xyz, pix_indices  # NOTE: do i need pix_xyz?
-
-
-def angular_separation(theta1, phi1, theta2, phi2):
-    dtheta = theta2 - theta1
-    dphi = phi2 - phi1
-    a = (
-        np.sin(dtheta / 2) ** 2
-        + np.cos(theta1) * np.cos(theta2) * np.sin(dphi / 2) ** 2
-    )
-    return 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
-
-
-def query_tree(
-    halo_xyz: np.ndarray,
-    theta_200: np.ndarray,
-    particle_tree: cKDTree,
-    particle_xyz: np.ndarray,
-):
-    """
-    Query the tree out to N times theta_200 to find which pixels belong to which halo.
-    """
-    N_halos = halo_xyz.shape[0]
-
-    search_angles = N * theta_200
-    search_radii = 2.0 * np.sin(0.5 * search_angles)
-
-    pix_in_halos = particle_tree.query_ball_point(x=halo_xyz, r=search_radii)
-    # list of arrays; each array contains pixel indices for that halo (in HealPix map)
-
-    # define and return halo_starts and halo_counts for efficient weighting
-    halo_counts = np.array([len(p) for p in pix_in_halos], dtype=np.int64)
-    halo_starts = np.zeros(N_halos, dtype=np.int64)
-    halo_starts[1:] = np.cumsum(
-        halo_counts[:-1]
-    )  # cumulative sum: exclude last; as first index is 0
-
-    pix_in_halos = np.concatenate(
-        [np.asarray(p, dtype=np.int64) for p in pix_in_halos]
-    )  # flatten the array of arrays
-
-    # create a halo index array mapping each pixel to its halo:
-    halo_indices = np.repeat(np.arange(N_halos, dtype=np.int64), halo_counts)
-
-    # exclude pixels not in any halo:
-    particle_xyz = particle_xyz[pix_in_halos]
-    halo_xyz = halo_xyz[halo_indices]
-
-    # obtain the angular distances between particles and the halo centers:
-    # chord_distances = np.linalg.norm(particle_xyz - halo_xyz, axis=1)       # NOTE: maybe could use directly the query?
-    # distances = 2.0 * np.arcsin(np.clip(chord_distances / 2.0, -1.0, 1.0))
-
-    pix_theta, pix_phi = convert_cart_to_rad(particle_xyz)
-    halo_theta, halo_phi = convert_cart_to_rad(halo_xyz)
-    distances = angular_separation(halo_theta, halo_phi, pix_theta, pix_phi)
-
-    return pix_in_halos, distances, halo_starts, halo_counts, halo_indices
 
 
 @jit(nopython=True, parallel=True, cache=True)
@@ -212,6 +124,7 @@ def weights_mechanism(
     return weights
 
 
+@timer
 def compute_weights(
     pixel_indices: np.ndarray,
     distances: np.ndarray,
@@ -238,6 +151,7 @@ def compute_weights(
 
 
 def paint_y(
+    config: PainterConfig,
     halo_theta: np.ndarray,
     halo_phi: np.ndarray,
     M_halos: np.ndarray,
@@ -246,39 +160,28 @@ def paint_y(
     z: float = Z,
     nside: int = NSIDE,
     use_weights: bool = True,
-    verbose: bool = False,
 ):
-    if verbose:
-        t0 = _log(f"Starting vectorized paint: {len(M_halos)} halos, nside={nside}")
-        print(
-            f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
-        )
+    logger.info(f"Starting vectorized paint: {len(M_halos)} halos, nside={nside}")
+    logger.info(
+        f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
+    )
 
     # Build and query tree
-    if verbose:
-        t1 = time.perf_counter()
-    tree, pix_xyz, pix_indices = build_tree(nside)
+    tree, pix_xyz, pix_indices = build_tree(config)
     npix = len(pix_indices)
-    if verbose:
-        t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes / 1e6:.1f}MB)", t1)
 
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
     theta_200 = compute_theta_200(MODEL, M_halos, Z=z, delta=200)
 
-    if verbose:
-        t1 = time.perf_counter()
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
+        config=config,
         halo_xyz=halo_xyz,
         theta_200=theta_200,
         particle_tree=tree,
         particle_xyz=pix_xyz,
     )
-    if verbose:
-        t1 = _log(f"query_tree ({len(pix_in_halos):,} pixel-halo pairs)", t1)
 
     if use_weights:
-        if verbose:
-            t1 = time.perf_counter()
         weights = compute_weights(
             pixel_indices=pix_in_halos,
             distances=distances,
@@ -287,30 +190,18 @@ def paint_y(
             theta_200=theta_200,
             particle_counts=particle_counts,
         )
-        if verbose:
-            t1 = _log("compute_weights", t1)
     else:
         weights = np.ones(len(pix_in_halos), dtype=np.float64)
 
-    if verbose:
-        t1 = time.perf_counter()
     log_M = np.log10(M_halos)
     log_distances = np.log(distances + 1e-40)
 
     # Create halo index array to map each pixel to its halo's mass
     log_M_values = log_M[halo_indices]
     z_values = np.full_like(distances, z, dtype=float)
-    if verbose:
-        t1 = _log("prepare arrays", t1)
 
-    if verbose:
-        t1 = time.perf_counter()
     y_values = interpolator.eval_for_logs(log_distances, z_values, log_M_values)
-    if verbose:
-        t1 = _log("interpolation", t1)
 
-    if verbose:
-        t1 = time.perf_counter()
     y_values_with_weight = y_values * weights
 
     y_map = np.zeros(npix, dtype=float)
@@ -320,141 +211,11 @@ def paint_y(
         halo_indices, weights=y_values_with_weight, minlength=len(M_halos)
     )
 
-    if verbose:
-        t1 = _log("accumulate", t1)
-        _log("Done", t0)
-
     return y_map, Y_per_halo, M_halos
 
 
-# For large datasets, try painting in chunks
-def paint_y_chunked(
-    halo_theta: np.ndarray,
-    halo_phi: np.ndarray,
-    M_halos: np.ndarray,
-    particle_counts: np.ndarray,
-    interpolator: BattagliaLogInterpolator,
-    z: float = Z,
-    nside: int = NSIDE,
-    chunk_size: int = 100,
-    use_weights: bool = True,
-    verbose: bool = False,  # TIMING
-):
-    if verbose:
-        t0 = _log(f"Starting: {len(M_halos)} halos, nside={nside}")
-        print(
-            f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
-        )
-
-    if verbose:
-        t1 = time.perf_counter()
-    tree, pix_xyz, pix_indices = build_tree(nside)
-    npix = len(pix_indices)
-    y_map = np.zeros(npix, dtype=float)
-    if verbose:
-        t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes / 1e6:.1f}MB)", t1)
-        print(f"  y_map: {y_map.nbytes / 1e6:.1f}MB")
-
-    N_halos = len(M_halos)
-    n_chunks = math.ceil(N_halos / chunk_size)
-
-    total_query = total_weight = total_interp = 0.0
-    total_pixels = 0
-
-    for chunk_idx in range(n_chunks):
-        start_idx = chunk_idx * chunk_size
-        end_idx = min(start_idx + chunk_size, N_halos)
-
-        halo_xyz_chunk = convert_rad_to_cart(
-            halo_theta[start_idx:end_idx], halo_phi[start_idx:end_idx]
-        )
-        M_chunk = M_halos[start_idx:end_idx]
-        theta_200_chunk = compute_theta_200(MODEL, M_chunk, Z=z, delta=200)
-
-        if verbose:
-            tq = time.perf_counter()
-        (
-            pix_in_halos,
-            distances_flat,
-            halo_starts,
-            halo_counts,
-            _,
-        ) = query_tree(
-            halo_xyz=halo_xyz_chunk,
-            theta_200=theta_200_chunk,
-            particle_tree=tree,
-            particle_xyz=pix_xyz,
-        )
-        if verbose:
-            total_query += time.perf_counter() - tq
-
-        if len(pix_in_halos) == 0:
-            continue
-
-        total_pixels += len(pix_in_halos)
-
-        if use_weights:
-            if verbose:
-                tw = time.perf_counter()
-            weights = compute_weights(
-                pixel_indices=pix_in_halos,
-                distances=distances_flat,
-                halo_starts=halo_starts,
-                halo_counts=halo_counts,
-                theta_200=theta_200_chunk,
-                particle_counts=particle_counts,
-            )
-            if verbose:
-                total_weight += time.perf_counter() - tw
-        else:
-            weights = np.ones(len(pix_in_halos), dtype=np.float64)
-
-        if verbose:
-            ti = time.perf_counter()
-        log_M_chunk = np.log10(M_chunk)
-        halo_indices_chunk = np.repeat(np.arange(len(M_chunk)), halo_counts)
-
-        log_theta = np.log(distances_flat + 1e-40)
-        log_M = log_M_chunk[halo_indices_chunk]
-        z_arr = np.full_like(distances_flat, z, dtype=float)
-        if verbose:
-            t_prep = time.perf_counter() - ti
-
-        if verbose:
-            t_interp_start = time.perf_counter()
-        y_iso = interpolator.eval_for_logs(
-            log_theta, z_arr, log_M
-        )  # interp: get y values from interpolator
-        if verbose:
-            t_interp_only = time.perf_counter() - t_interp_start
-
-        y_weighted = y_iso * weights
-
-        if verbose:
-            t_accum_start = time.perf_counter()  # accum: add the y values to the map
-        np.add.at(y_map, pix_in_halos, y_weighted)
-        if verbose:
-            t_accum = time.perf_counter() - t_accum_start
-            total_interp += t_prep + t_interp_only + t_accum
-            # Log first chunk breakdown for insight
-            if chunk_idx == 0:
-                print(
-                    f"  [chunk 0 breakdown] prep={t_prep:.3f}s, interp={t_interp_only:.3f}s, accum={t_accum:.3f}s"
-                )
-
-    if verbose:
-        print(
-            f"  --- Timing ({n_chunks} chunks, {total_pixels:,} pixel-halo pairs) ---"
-        )
-        print(f"  query_tree:        {total_query:.3f}s")
-        print(f"  compute_weights:   {total_weight:.3f}s")
-        print(f"  interp+accumulate: {total_interp:.3f}s")
-        _log("Done", t0)
-
-    return y_map
-
-
 def paint_y_wrapper(
+    config: PainterConfig,
     halo_theta: np.ndarray,
     halo_phi: np.ndarray,
     M_halos: np.ndarray,
@@ -462,30 +223,14 @@ def paint_y_wrapper(
     interpolator: BattagliaLogInterpolator,
     z: float = Z,
     nside: int = NSIDE,
-    chunk_size: int = 1000,
-    method: str = "vectorized",
     use_weights: bool = True,
     verbose: bool = False,
 ):
     """
     Paint y-map wrapper
     """
-    if method == "chunked":
-        y_map = paint_y_chunked(
-            halo_theta,
-            halo_phi,
-            M_halos,
-            particle_counts,
-            interpolator,
-            z,
-            nside,
-            chunk_size,
-            use_weights,
-            verbose,
-        )
-        return y_map, None, M_halos
-
     return paint_y(
+        config,
         halo_theta,
         halo_phi,
         M_halos,
@@ -494,7 +239,6 @@ def paint_y_wrapper(
         z,
         nside,
         use_weights,
-        verbose,
     )
 
 
@@ -661,6 +405,7 @@ def plot_Y_vs_M(M_halos, Y_per_halo, outpng="Y_vs_M.png", nbins_plot=80):
 
 
 def paint_abacus(
+    config: PainterConfig,
     halo_dir,
     healcounts_file_1,
     healcounts_file_2,
@@ -686,6 +431,7 @@ def paint_abacus(
 
     print("Painting y-map ...")
     y_map, Y_per_halo, M_halos_out = paint_y_wrapper(
+        config,
         halo_theta=halo_theta,
         halo_phi=halo_phi,
         M_halos=M_halos,
@@ -693,7 +439,6 @@ def paint_abacus(
         interpolator=interpolator,
         z=redshift,
         nside=nside,
-        method=method,
         use_weights=use_weights,
     )
 
