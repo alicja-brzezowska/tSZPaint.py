@@ -1,30 +1,27 @@
-import numpy as np
-import healpy as hp
-from scipy.spatial import cKDTree
-from numba import jit, prange
-import asdf
-import matplotlib.pyplot as plt
 import math
-import time
-import psutil
 import os
-import matplotlib.pyplot as plt
+import time
 
-from tszpaint.y_profile import (
-    Battaglia16ThermalSZProfile,
-    create_battaglia_profile,
-    compute_R_delta,
-    angular_size,
-)
-from tszpaint.interpolator import BattagliaLogInterpolator
+import healpy as hp
+import matplotlib.pyplot as plt
+import numpy as np
+import psutil
+from numba import jit, prange
+from scipy.spatial import cKDTree
+
+from tszpaint.abacus_loader import load_abacus_for_painting
 from tszpaint.config import (
-    DATA_PATH,
-    ABACUS_DATA_PATH,
-    INTERPOLATORS_PATH,
     HALO_CATALOGS_PATH,
     HEALCOUNTS_PATH,
+    INTERPOLATORS_PATH,
 )
-from tszpaint.abacus_loader import load_abacus_for_painting
+from tszpaint.interpolator import BattagliaLogInterpolator
+from tszpaint.y_profile import (
+    Battaglia16ThermalSZProfile,
+    angular_size,
+    compute_R_delta,
+    create_battaglia_profile,
+)
 
 # HEALPix
 NSIDE = 8192
@@ -53,28 +50,6 @@ def _log(msg, t0=None):
     else:
         print(f"  {msg} | mem: {mem:.0f} MB")
     return time.perf_counter()
-
-
-def create_mock_particle_data(NPIX, m):
-    """Create mock particle count datasets for tests."""
-    rng = np.random.default_rng(seed=28)
-    baseline = 1_000_000_000
-    contrast = rng.lognormal(mean=0.0, sigma=2.0, size=len(m))
-    lam = baseline * contrast
-    particle_counts = rng.poisson(lam=lam).astype(np.int64)
-    theta, phi = hp.pix2ang(NSIDE, m)
-    return theta, phi, particle_counts
-
-
-def create_mock_halo_catalogs(NPIX, m):
-    """Create halo-catalog mock data for testing."""
-    N_halos = 20000
-    rng = np.random.default_rng(123)
-    halo_theta = np.pi * rng.random(N_halos)
-    halo_phi = 2 * np.pi * rng.random(N_halos)
-    logM = rng.uniform(15.5, 16.5, size=N_halos)
-    M_halos = 10.0**logM
-    return halo_theta, halo_phi, M_halos
 
 
 def convert_rad_to_cart(theta, phi):
@@ -726,7 +701,7 @@ def paint_abacus(
 
     interpolator = load_interpolator(interpolator_path)
 
-    print(f"Painting y-map ...")
+    print("Painting y-map ...")
     y_map, Y_per_halo, M_halos_out = paint_y_wrapper(
         halo_theta=halo_theta,
         halo_phi=halo_phi,
@@ -739,7 +714,7 @@ def paint_abacus(
         use_weights=use_weights,
     )
 
-    print(f"\nMap statistics:")
+    print("\nMap statistics:")
     print(f"  Min: {y_map.min():.3e}")
     print(f"  Max: {y_map.max():.3e}")
     print(f"  Mean: {y_map.mean():.3e}")
@@ -782,7 +757,7 @@ def main():
     )
     output_file = "y_map_abacus.fits"
 
-    print(f"Painting Abacus tSZ map...")
+    print("Painting Abacus tSZ map...")
     print(f"Halo directory: {halo_dir}")
     print(f"Healcounts file 1: {healcounts_file1}")
     print(f"Healcounts file 2: {healcounts_file2}")
