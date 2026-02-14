@@ -9,10 +9,27 @@ def convert_rad_to_cart(theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
     )
 
 
+def normalize_angle(angle: np.ndarray):
+    """Normalize angles to the range [0, 2π)."""
+    return np.where(angle < 0, angle + 2 * np.pi, angle)
+
+
 def convert_cart_to_rad(xyz: np.ndarray):
     """Given cartesian coordinates, convert to radial."""
     x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
     theta = np.arccos(np.clip(z, -1, 1))
     phi = np.arctan2(y, x)
-    phi = np.where(phi < 0, phi + 2 * np.pi, phi)  # Ensure phi in [0, 2π]
+    phi = normalize_angle(phi)
+    return theta, phi
+
+
+def convert_comoving_to_sky(x: np.ndarray, y: np.ndarray, z: np.ndarray):
+    """
+    Convert comoving box coordinates to healpix sky coordinates.
+    Abacus has the origin at the center of the box.
+    """
+    r = np.sqrt(x**2 + y**2 + z**2)
+    theta = np.arccos(np.clip(z / r, -1.0, 1.0))
+    phi = np.arctan2(y, x)  # better than arctan(y/x), as distinguishes quadrants
+    phi = normalize_angle(phi)
     return theta, phi
