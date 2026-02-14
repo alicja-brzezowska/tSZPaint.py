@@ -1,7 +1,11 @@
-import numpy as np
-import healpy as hp
-import asdf
 from pathlib import Path
+
+import asdf
+import healpy as hp
+import numpy as np
+import psutil
+
+from tszpaint.config import HALO_CATALOGS_PATH
 
 
 def comoving_to_sky(x, y, z):
@@ -73,9 +77,20 @@ def load_abacus_healcounts(filepath):
     return particle_counts
 
 
+def load_multiple_healcounts(filepath1, filepath2, filepath3):
+    counts1 = load_abacus_healcounts(filepath1)
+    counts2 = load_abacus_healcounts(filepath2)
+    counts3 = load_abacus_healcounts(filepath3)
+
+    sum_counts = counts1 + counts2 + counts3
+    return sum_counts
+
+
 def load_abacus_for_painting(
     halo_dir,
-    healcounts_file,
+    healcounts_file_1,
+    healcounts_file_2,
+    healcounts_file_3,
     nside=1024,
     return_pixels=False,
 ):
@@ -85,17 +100,16 @@ def load_abacus_for_painting(
     theta, phi = comoving_to_sky(x, y, z)
 
     M_halos = N_particles.astype(np.float64) * particle_mass
-    particle_counts = load_abacus_healcounts(healcounts_file)
+    particle_counts = load_multiple_healcounts(
+        healcounts_file_1, healcounts_file_2, healcounts_file_3
+    )
 
     if return_pixels:
-        halo_pixels = hp.ang2pix(nside, theta, phi)
+        halo_pixels = hp.ang2pix(nside, theta, phi, nest=True)
         return theta, phi, M_halos, particle_counts, redshift, halo_pixels
 
     return theta, phi, M_halos, particle_counts, redshift
 
-
-import psutil
-from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 
 halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
 
