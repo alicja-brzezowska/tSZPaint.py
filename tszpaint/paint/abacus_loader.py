@@ -1,12 +1,21 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 import asdf
 import healpy as hp
 import numpy as np
-import psutil
 
-from tszpaint.config import HALO_CATALOGS_PATH
 from tszpaint.converters import convert_comoving_to_sky
+
+
+@dataclass
+class SimulationData:
+    theta: np.ndarray
+    phi: np.ndarray
+    m_halos: np.ndarray
+    particle_counts: np.ndarray
+    redshift: float
+    halo_pixels: np.ndarray
 
 
 def load_abacus_halos(
@@ -54,7 +63,6 @@ def load_abacus_for_painting(
     healcounts_file_2,
     healcounts_file_3,
     nside=1024,
-    return_pixels=False,
 ):
     pos, N_particles, particle_mass, redshift = load_abacus_halos(halo_dir)
 
@@ -65,16 +73,6 @@ def load_abacus_for_painting(
     particle_counts = load_multiple_healcounts(
         healcounts_file_1, healcounts_file_2, healcounts_file_3
     )
+    halo_pixels = hp.ang2pix(nside, theta, phi, nest=True)
 
-    if return_pixels:
-        halo_pixels = hp.ang2pix(nside, theta, phi, nest=True)
-        return theta, phi, M_halos, particle_counts, redshift, halo_pixels
-
-    return theta, phi, M_halos, particle_counts, redshift
-
-
-halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-
-positions, N_particles, pm, z = load_abacus_halos(halo_dir)
-mem_used = psutil.Process().memory_info().rss / 1e9  # GB
-print(f"Memory after loading: {mem_used:.2f} GB")
+    return SimulationData(theta, phi, M_halos, particle_counts, redshift, halo_pixels)
