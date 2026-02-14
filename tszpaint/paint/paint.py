@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,7 +47,7 @@ def compute_theta_200(
     return angular_size(model, R_200, Z)
 
 
-def load_interpolator(path=JAX_PATH):
+def load_interpolator(path: Path = JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
 
 
@@ -138,14 +140,14 @@ def paint_y_wrapper(
 
 def paint_abacus(
     config: PainterConfig,
-    halo_dir,
-    healcounts_file_1,
-    healcounts_file_2,
-    healcounts_file_3,
-    output_file="y_map_abacus.fits",
-    nside=NSIDE,
-    interpolator_path=JAX_PATH,
-    use_weights=True,
+    halo_dir: Path,
+    healcounts_file_1: Path,
+    healcounts_file_2: Path,
+    healcounts_file_3: Path,
+    output_file: str = "y_map_abacus.fits",
+    nside: int = NSIDE,
+    interpolator_path: Path = JAX_PATH,
+    use_weights: bool = True,
 ):
     """
     Paint the y-compton map using Abacus halo catalogs and heal-counts.
@@ -160,7 +162,7 @@ def paint_abacus(
 
     interpolator = load_interpolator(interpolator_path)
 
-    print("Painting y-map ...")
+    logger.info("Painting y-map ...")
     y_map, Y_per_halo, M_halos_out = paint_y_wrapper(
         config,
         data,
@@ -168,15 +170,15 @@ def paint_abacus(
         use_weights=use_weights,
     )
 
-    print("\nMap statistics:")
-    print(f"  Min: {y_map.min():.3e}")
-    print(f"  Max: {y_map.max():.3e}")
-    print(f"  Mean: {y_map.mean():.3e}")
-    print(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
+    logger.info("\nMap statistics:")
+    logger.info(f"  Min: {y_map.min():.3e}")
+    logger.info(f"  Max: {y_map.max():.3e}")
+    logger.info(f"  Mean: {y_map.mean():.3e}")
+    logger.info(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
 
     if output_file:
         hp.write_map(output_file, y_map, overwrite=True, nest=True)
-        print(f"Saved to {output_file}")
+        logger.info(f"Saved to {output_file}")
 
         plot_ra_dec(
             y_map,
@@ -211,12 +213,12 @@ def main():
     )
     output_file = "y_map_abacus.fits"
 
-    print("Painting Abacus tSZ map...")
-    print(f"Halo directory: {halo_dir}")
-    print(f"Healcounts file 1: {healcounts_file1}")
-    print(f"Healcounts file 2: {healcounts_file2}")
-    print(f"Healcounts file 3: {healcounts_file3}")
-    print(f"Output file: {output_file}")
+    logger.info("Painting Abacus tSZ map...")
+    logger.info(f"Halo directory: {halo_dir}")
+    logger.info(f"Healcounts file 1: {healcounts_file1}")
+    logger.info(f"Healcounts file 2: {healcounts_file2}")
+    logger.info(f"Healcounts file 3: {healcounts_file3}")
+    logger.info(f"Output file: {output_file}")
     config = PainterConfig(NSIDE, N, N_BINS)
 
     # interpolator = load_interpolator(JAX_PATH)
@@ -243,14 +245,14 @@ def main():
     #    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
     #    hp.graticule()
     #    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
-    #    print("Saved visualization to y_map_abacus_mock.png")
+    #    logger.info("Saved visualization to y_map_abacus_mock.png")
 
     y_map = paint_abacus(
         config,
-        halo_dir=str(halo_dir),
-        healcounts_file_1=str(healcounts_file1),
-        healcounts_file_2=str(healcounts_file2),
-        healcounts_file_3=str(healcounts_file3),
+        halo_dir=halo_dir,
+        healcounts_file_1=healcounts_file1,
+        healcounts_file_2=healcounts_file2,
+        healcounts_file_3=healcounts_file3,
         output_file=output_file,
         nside=NSIDE,
     )
@@ -265,7 +267,7 @@ def main():
     )
     hp.graticule()
     plt.savefig("y_map_abacus_real.png", dpi=200, bbox_inches="tight")
-    print("Saved visualization to y_map_abacus_real.png")
+    logger.info("Saved visualization to y_map_abacus_real.png")
 
 
 if __name__ == "__main__":
