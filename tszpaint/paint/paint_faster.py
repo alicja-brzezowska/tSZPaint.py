@@ -3,6 +3,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from tszpaint.config import DATA_PATH, INTERPOLATORS_PATH
+from tszpaint.converters import convert_rad_to_cart
 from tszpaint.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile import (
     Battaglia16ThermalSZProfile,
@@ -181,14 +182,6 @@ def compute_weights(
     weights = raw_weights * normalization[inverse_indices]
 
     return weights
-
-
-def convert_rad_to_cart(theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
-    """Convert spherical coordinates to Cartesian (unit vectors)."""
-    sin_theta = np.sin(theta)
-    return np.stack(
-        [sin_theta * np.cos(phi), sin_theta * np.sin(phi), np.cos(theta)], axis=1
-    )
 
 
 def compute_theta_200(
