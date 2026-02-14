@@ -1,5 +1,6 @@
+
 import asdf
-from pathlib import Path
+
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 
 
@@ -27,11 +28,19 @@ def inspect_file(filepath, name):
                 elif key == "halo_lightcone" and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 if key == "data" and isinstance(data, dict):
+                    tsi = data["halo_timeslice_index"]
+                    print("type:", type(tsi))
+                    print("shape:", tsi.shape, "dtype:", tsi.dtype)
+
+                    print("first 20:", tsi[:20])
+                    print("min/max (may read full array):", tsi.min(), tsi.max())
+
+                if key == "halo_timeslice" and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 if key == "header_post" and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
 
-    except Exception as e:
+    except Exception:
         with open(filepath, "r") as f:
             lines = f.readlines()
             print("Text file, full content:")
