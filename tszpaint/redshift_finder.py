@@ -1,12 +1,12 @@
-import asdf
 from pathlib import Path
-from config import HEALCOUNTS_PATH, DATA_PATH
+
+import asdf
+from config import DATA_PATH, HEALCOUNTS_PATH
 
 
 def obtain_healcount_redshift(filepath):
     with asdf.open(filepath) as af:
         return af["headers"][0]["Redshift"]
-    return redshift
 
 
 def main():
