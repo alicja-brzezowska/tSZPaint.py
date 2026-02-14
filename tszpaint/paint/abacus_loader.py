@@ -41,14 +41,17 @@ def load_abacus_halos(
     return positions, N_particles, particle_mass, redshift
 
 
-def load_abacus_healcounts(filepath):
+def load_abacus_healcounts(filepath: Path):
     with asdf.open(filepath) as f:
-        # header = dict(f["headers"]) if "headers" in f else {} # or header_post
         particle_counts = np.array(f["data"]["heal-counts"])
     return particle_counts
 
 
-def load_multiple_healcounts(filepath1, filepath2, filepath3):
+def load_multiple_healcounts(
+    filepath1: Path,
+    filepath2: Path,
+    filepath3: Path,
+):
     counts1 = load_abacus_healcounts(filepath1)
     counts2 = load_abacus_healcounts(filepath2)
     counts3 = load_abacus_healcounts(filepath3)
@@ -58,16 +61,15 @@ def load_multiple_healcounts(filepath1, filepath2, filepath3):
 
 
 def load_abacus_for_painting(
-    halo_dir,
-    healcounts_file_1,
-    healcounts_file_2,
-    healcounts_file_3,
+    halo_dir: Path,
+    healcounts_file_1: Path,
+    healcounts_file_2: Path,
+    healcounts_file_3: Path,
     nside=1024,
 ):
     pos, N_particles, particle_mass, redshift = load_abacus_halos(halo_dir)
 
-    x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
-    theta, phi = convert_comoving_to_sky(x, y, z)
+    theta, phi = convert_comoving_to_sky(pos)
 
     M_halos = N_particles.astype(np.float64) * particle_mass
     particle_counts = load_multiple_healcounts(

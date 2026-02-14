@@ -23,11 +23,12 @@ def convert_cart_to_rad(xyz: np.ndarray):
     return theta, phi
 
 
-def convert_comoving_to_sky(x: np.ndarray, y: np.ndarray, z: np.ndarray):
+def convert_comoving_to_sky(xyz: np.ndarray):
     """
     Convert comoving box coordinates to healpix sky coordinates.
     Abacus has the origin at the center of the box.
     """
+    x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(np.clip(z / r, -1.0, 1.0))
     phi = np.arctan2(y, x)  # better than arctan(y/x), as distinguishes quadrants
