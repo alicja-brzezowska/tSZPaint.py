@@ -606,9 +606,9 @@ def plot_Y_vs_M(M_halos, Y_per_halo, outpng="Y_vs_M.png", nbins_plot=80):
 
 def paint_abacus(
     halo_dir,
-    healcounts_file1,
-    healcounts_file2,
-    healcounts_file3,
+    healcounts_file_1,
+    healcounts_file_2,
+    healcounts_file_3,
     output_file="y_map_abacus.fits",
     nside=NSIDE,
     interpolator_path=JAX_PATH,
@@ -620,9 +620,9 @@ def paint_abacus(
     """
     halo_theta, halo_phi, M_halos, particle_counts, redshift = load_abacus_for_painting(
         halo_dir=halo_dir,
-        healcounts_file1=healcounts_file1,
-        healcounts_file2=healcounts_file2,
-        healcounts_file3=healcounts_file3,
+        healcounts_file_1=healcounts_file_1,
+        healcounts_file_2=healcounts_file_2,
+        healcounts_file_3=healcounts_file_3,
         nside=nside,
     )
 
@@ -704,9 +704,9 @@ def main():
 
     y_map = paint_abacus(
         halo_dir=str(halo_dir),
-        healcounts_file1=str(healcounts_file1),
-        healcounts_file2=str(healcounts_file2),
-        healcounts_file3=str(healcounts_file3),
+        healcounts_file_1=str(healcounts_file1),
+        healcounts_file_2=str(healcounts_file2),
+        healcounts_file_3=str(healcounts_file3),
         output_file=output_file,
         method="vectorized",
         nside=NSIDE,
