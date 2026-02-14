@@ -6,21 +6,7 @@ import numpy as np
 import psutil
 
 from tszpaint.config import HALO_CATALOGS_PATH
-
-
-def comoving_to_sky(x, y, z):
-    """
-    Convert comoving box coordinates to healpix sky coordinates.
-    Abacus has the origin at the center of the box.
-    """
-    r = np.sqrt(x**2 + y**2 + z**2)
-    theta = np.arccos(np.clip(z / r, -1.0, 1.0))
-    phi = np.arctan2(y, x)  # better than arctan(y/x), as distinguishes quadrants
-    phi = np.where(
-        phi < 0, phi + 2 * np.pi, phi
-    )  # [condition, value if true, value if false]
-    # ensures phi is in [0, 2pi]
-    return theta, phi
+from tszpaint.converters import convert_comoving_to_sky
 
 
 def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
@@ -97,7 +83,7 @@ def load_abacus_for_painting(
     pos, N_particles, particle_mass, redshift = load_abacus_halos(halo_dir)
 
     x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
-    theta, phi = comoving_to_sky(x, y, z)
+    theta, phi = convert_comoving_to_sky(x, y, z)
 
     M_halos = N_particles.astype(np.float64) * particle_mass
     particle_counts = load_multiple_healcounts(
