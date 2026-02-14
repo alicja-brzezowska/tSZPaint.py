@@ -26,10 +26,20 @@ def inspect_file(filepath, name):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 elif key == 'halo_lightcone' and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
-                if key == 'data' and isinstance(data, dict):
+
+                    tsi = data["halo_timeslice_index"]
+                    print("type:", type(tsi))
+                    print("shape:", tsi.shape, "dtype:", tsi.dtype)
+
+                    print("first 20:", tsi[:20])
+                    print("min/max (may read full array):", tsi.min(), tsi.max())
+
+                if key == 'halo_timeslice' and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 if key == 'header_post' and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
+
+
 
     except Exception as e:
             with open(filepath, 'r') as f:
