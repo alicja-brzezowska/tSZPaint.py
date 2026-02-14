@@ -7,14 +7,16 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import unxt as u
-from jax.typing import ArrayLike 
-from quadax import quadts # jax friendly quadrature integration
-from wcosmo import comoving_distance, efunc  #jax friendly atropy.cosmology
-from wcosmo.utils import disable_units  # wcosmo objects have defaults units; disable as jax arrays don't support units
+from jax.typing import ArrayLike
+from quadax import quadts  # jax friendly quadrature integration
+from wcosmo import comoving_distance, efunc  # jax friendly atropy.cosmology
+from wcosmo.utils import (
+    disable_units,
+)  # wcosmo objects have defaults units; disable as jax arrays don't support units
 
 import tszpaint.constants as const
 
-jax.config.update("jax_enable_x64", False) #make float 64 
+jax.config.update("jax_enable_x64", False)  # make float 64
 disable_units()
 
 FILE = Path("y_values_jax_2.pkl")
@@ -22,9 +24,9 @@ FILE = Path("y_values_jax_2.pkl")
 G_VALUE = const.G_SI.value
 
 DELTA = 200
-SCALE = 1e9 
+SCALE = 1e9
 ZMAX = 1e5
-RTOL = 1e-3 # saw that this was sufficient in tests, can change
+RTOL = 1e-3  # saw that this was sufficient in tests, can change
 
 
 def get_gnfw_params(mass: float, redshift: float):
@@ -33,7 +35,7 @@ def get_gnfw_params(mass: float, redshift: float):
 
     # From Battaglia et al. 2016
     P0 = 18.1 * m**0.154 * z1 ** (-0.758)
-    xc = 0.497 * m ** (-0.00865) * z1**0.731    # dimensionless scale radius
+    xc = 0.497 * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
     beta = 4.35 * m**0.0393 * z1**0.415
     alpha = 1.0
     gamma = -0.3
@@ -64,9 +66,7 @@ def y_value(
 
     R_200 = (3 * mass / (4 * jnp.pi * DELTA * rho_crit_msun_mpc3)) ** (1 / 3)
 
-    d_A = comoving_distance(redshift, H0, Om0) / (
-        redshift + 1.0
-    )  
+    d_A = comoving_distance(redshift, H0, Om0) / (redshift + 1.0)
     theta_200 = jnp.arctan(R_200 / d_A)
 
     x_sq = (theta / theta_200) ** 2
@@ -80,7 +80,7 @@ def y_value(
 
     integral_value, _ = quadts(
         integrand,
-        [0.0, ZMAX],  
+        [0.0, ZMAX],
         epsrel=RTOL,
     )
 
@@ -102,14 +102,14 @@ def measure_y_values(
     Omega_c: float = 0.2589,
     Omega_b: float = 0.0486,
     h: float = 0.6774,
-    N_log_theta: int = 2*DIM,
+    N_log_theta: int = 2 * DIM,
     log_theta_min: float = -15.4,
     log_theta_max: float = 1,
     z_min: float = 1e-3,
     z_max: float = 5.0,
     log_M_min: float = 11.0,
     log_M_max: float = 15.7,
-    N_z: int = DIM, 
+    N_z: int = DIM,
     N_log_M: int = DIM,
 ):
     OmegaM = Omega_b + Omega_c
@@ -127,7 +127,7 @@ def measure_y_values(
     theta_grid, z_grid, mass_grid = jnp.meshgrid(
         log_thetas, redshifts, log_masses, indexing="ij"
     )
-    
+
     # flatten grids for vmap
     theta_flat = theta_grid.ravel()
     z_flat = z_grid.ravel()
@@ -191,4 +191,3 @@ def dump_to_file(
 
 if __name__ == "__main__":
     dump_to_file(*measure_y_values())
-

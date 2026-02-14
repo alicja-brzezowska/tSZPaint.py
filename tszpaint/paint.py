@@ -17,14 +17,20 @@ from tszpaint.y_profile import (
     angular_size,
 )
 from tszpaint.interpolator import BattagliaLogInterpolator
-from tszpaint.config import DATA_PATH, ABACUS_DATA_PATH, INTERPOLATORS_PATH, HALO_CATALOGS_PATH, HEALCOUNTS_PATH
+from tszpaint.config import (
+    DATA_PATH,
+    ABACUS_DATA_PATH,
+    INTERPOLATORS_PATH,
+    HALO_CATALOGS_PATH,
+    HEALCOUNTS_PATH,
+)
 from tszpaint.abacus_loader import load_abacus_for_painting
 
 # HEALPix
 NSIDE = 8192
-Z = 0.5 # FOR MOCK DATA
-N = 2 # Multiple of theta_200 to search
-nbins = 20 # NOTE: THINK how many bins!
+Z = 0.5  # FOR MOCK DATA
+N = 2  # Multiple of theta_200 to search
+nbins = 20  # NOTE: THINK how many bins!
 
 MODEL = create_battaglia_profile()
 PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
@@ -34,9 +40,11 @@ JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
 
 PAINT_METHOD = "vectorized"
 
+
 # NOTE: TIMING
 def _mem_mb():
     return psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+
 
 def _log(msg, t0=None):
     mem = _mem_mb()
@@ -103,13 +111,16 @@ def build_tree(nside=NSIDE):
     theta, phi = hp.pix2ang(nside, pix_indices, nest=True)
     pix_xyz = convert_rad_to_cart(theta, phi)
     tree = cKDTree(pix_xyz)
-    return tree, pix_xyz, pix_indices # NOTE: do i need pix_xyz?
+    return tree, pix_xyz, pix_indices  # NOTE: do i need pix_xyz?
 
 
 def angular_separation(theta1, phi1, theta2, phi2):
     dtheta = theta2 - theta1
     dphi = phi2 - phi1
-    a = np.sin(dtheta/2)**2 + np.cos(theta1) * np.cos(theta2) * np.sin(dphi/2)**2
+    a = (
+        np.sin(dtheta / 2) ** 2
+        + np.cos(theta1) * np.cos(theta2) * np.sin(dphi / 2) ** 2
+    )
     return 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
 
@@ -118,7 +129,7 @@ def convert_cart_to_rad(xyz):
     x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
     theta = np.arccos(np.clip(z, -1, 1))
     phi = np.arctan2(y, x)
-    phi = np.where(phi < 0, phi + 2*np.pi, phi)  # Ensure phi in [0, 2π]
+    phi = np.where(phi < 0, phi + 2 * np.pi, phi)  # Ensure phi in [0, 2π]
     return theta, phi
 
 
@@ -142,11 +153,13 @@ def query_tree(
     # define and return halo_starts and halo_counts for efficient weighting
     halo_counts = np.array([len(p) for p in pix_in_halos], dtype=np.int64)
     halo_starts = np.zeros(N_halos, dtype=np.int64)
-    halo_starts[1:] = np.cumsum(halo_counts[:-1]) # cumulative sum: exclude last; as first index is 0
+    halo_starts[1:] = np.cumsum(
+        halo_counts[:-1]
+    )  # cumulative sum: exclude last; as first index is 0
 
     pix_in_halos = np.concatenate(
         [np.asarray(p, dtype=np.int64) for p in pix_in_halos]
-    ) #flatten the array of arrays
+    )  # flatten the array of arrays
 
     # create a halo index array mapping each pixel to its halo:
     halo_indices = np.repeat(np.arange(N_halos, dtype=np.int64), halo_counts)
@@ -156,8 +169,8 @@ def query_tree(
     halo_xyz = halo_xyz[halo_indices]
 
     # obtain the angular distances between particles and the halo centers:
-    #chord_distances = np.linalg.norm(particle_xyz - halo_xyz, axis=1)       # NOTE: maybe could use directly the query?
-    #distances = 2.0 * np.arcsin(np.clip(chord_distances / 2.0, -1.0, 1.0))
+    # chord_distances = np.linalg.norm(particle_xyz - halo_xyz, axis=1)       # NOTE: maybe could use directly the query?
+    # distances = 2.0 * np.arcsin(np.clip(chord_distances / 2.0, -1.0, 1.0))
 
     pix_theta, pix_phi = convert_cart_to_rad(particle_xyz)
     halo_theta, halo_phi = convert_cart_to_rad(halo_xyz)
@@ -167,18 +180,18 @@ def query_tree(
 
 
 @jit(nopython=True, parallel=True, cache=True)
-
-
 def weights_mechanism(
     distances: np.ndarray,
     halo_starts: np.ndarray,
     halo_counts: np.ndarray,
     theta_200: np.ndarray,
-    init_weights: np.ndarray, # weights based on particle counts
+    init_weights: np.ndarray,  # weights based on particle counts
 ):
     """compute normalized weights for each particle contribution within halos."""
 
-    EMPTY_FRACTION_THRESHOLD = 2.0 / 3.0  # fall back to isotropic if >2/3 of bin is empty
+    EMPTY_FRACTION_THRESHOLD = (
+        2.0 / 3.0
+    )  # fall back to isotropic if >2/3 of bin is empty
 
     N_halos = len(theta_200)
     weights = np.ones_like(distances, dtype=np.float64)
@@ -226,7 +239,11 @@ def weights_mechanism(
         result = np.ones(count, dtype=np.float64)
         for i in range(count):
             b = bin_ids[i]
-            empty_frac = 1.0 - bin_nonempty[b] / bin_pixel_tot[b] if bin_pixel_tot[b] > 0.0 else 1.0
+            empty_frac = (
+                1.0 - bin_nonempty[b] / bin_pixel_tot[b]
+                if bin_pixel_tot[b] > 0.0
+                else 1.0
+            )
             if empty_frac > EMPTY_FRACTION_THRESHOLD:
                 result[i] = 1.0  # uniform weight → isotropic profile
             else:
@@ -235,7 +252,6 @@ def weights_mechanism(
         weights[start : start + count] = result
 
     return weights
-
 
 
 def compute_weights(
@@ -250,10 +266,14 @@ def compute_weights(
     Calculate the proportional weights for pixels based on particle counts.
     """
     counts = particle_counts[pixel_indices]
-    init_weights = np.power(counts + 1e-10, 5.0 / 3.0) # propto N_particles^(5/3)
+    init_weights = np.power(counts + 1e-10, 5.0 / 3.0)  # propto N_particles^(5/3)
 
     weights = weights_mechanism(
-        distances, halo_starts, halo_counts, theta_200, init_weights,
+        distances,
+        halo_starts,
+        halo_counts,
+        theta_200,
+        init_weights,
     )
 
     return weights
@@ -272,19 +292,23 @@ def paint_y(
 ):
     if verbose:
         t0 = _log(f"Starting vectorized paint: {len(M_halos)} halos, nside={nside}")
-        print(f"  particle_counts: {particle_counts.nbytes/1e6:.1f}MB, dtype={particle_counts.dtype}")
+        print(
+            f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
+        )
 
     # Build and query tree
-    if verbose: t1 = time.perf_counter()
+    if verbose:
+        t1 = time.perf_counter()
     tree, pix_xyz, pix_indices = build_tree(nside)
     npix = len(pix_indices)
     if verbose:
-        t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes/1e6:.1f}MB)", t1)
+        t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes / 1e6:.1f}MB)", t1)
 
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
     theta_200 = compute_theta_200(MODEL, M_halos, Z=z, delta=200)
 
-    if verbose: t1 = time.perf_counter()
+    if verbose:
+        t1 = time.perf_counter()
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
         halo_xyz=halo_xyz,
         theta_200=theta_200,
@@ -295,7 +319,8 @@ def paint_y(
         t1 = _log(f"query_tree ({len(pix_in_halos):,} pixel-halo pairs)", t1)
 
     if use_weights:
-        if verbose: t1 = time.perf_counter()
+        if verbose:
+            t1 = time.perf_counter()
         weights = compute_weights(
             pixel_indices=pix_in_halos,
             distances=distances,
@@ -309,7 +334,8 @@ def paint_y(
     else:
         weights = np.ones(len(pix_in_halos), dtype=np.float64)
 
-    if verbose: t1 = time.perf_counter()
+    if verbose:
+        t1 = time.perf_counter()
     log_M = np.log10(M_halos)
     log_distances = np.log(distances + 1e-40)
 
@@ -319,18 +345,22 @@ def paint_y(
     if verbose:
         t1 = _log("prepare arrays", t1)
 
-    if verbose: t1 = time.perf_counter()
+    if verbose:
+        t1 = time.perf_counter()
     y_values = interpolator.eval_for_logs(log_distances, z_values, log_M_values)
     if verbose:
         t1 = _log("interpolation", t1)
 
-    if verbose: t1 = time.perf_counter()
+    if verbose:
+        t1 = time.perf_counter()
     y_values_with_weight = y_values * weights
 
     y_map = np.zeros(npix, dtype=float)
     np.add.at(y_map, pix_in_halos, y_values_with_weight)
 
-    Y_per_halo = np.bincount(halo_indices, weights=y_values_with_weight, minlength=len(M_halos))
+    Y_per_halo = np.bincount(
+        halo_indices, weights=y_values_with_weight, minlength=len(M_halos)
+    )
 
     if verbose:
         t1 = _log("accumulate", t1)
@@ -354,15 +384,18 @@ def paint_y_chunked(
 ):
     if verbose:
         t0 = _log(f"Starting: {len(M_halos)} halos, nside={nside}")
-        print(f"  particle_counts: {particle_counts.nbytes/1e6:.1f}MB, dtype={particle_counts.dtype}")
+        print(
+            f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
+        )
 
-    if verbose: t1 = time.perf_counter()
+    if verbose:
+        t1 = time.perf_counter()
     tree, pix_xyz, pix_indices = build_tree(nside)
     npix = len(pix_indices)
     y_map = np.zeros(npix, dtype=float)
     if verbose:
-        t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes/1e6:.1f}MB)", t1)
-        print(f"  y_map: {y_map.nbytes/1e6:.1f}MB")
+        t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes / 1e6:.1f}MB)", t1)
+        print(f"  y_map: {y_map.nbytes / 1e6:.1f}MB")
 
     N_halos = len(M_halos)
     n_chunks = math.ceil(N_halos / chunk_size)
@@ -380,7 +413,8 @@ def paint_y_chunked(
         M_chunk = M_halos[start_idx:end_idx]
         theta_200_chunk = compute_theta_200(MODEL, M_chunk, Z=z, delta=200)
 
-        if verbose: tq = time.perf_counter()
+        if verbose:
+            tq = time.perf_counter()
         (
             pix_in_halos,
             distances_flat,
@@ -393,7 +427,8 @@ def paint_y_chunked(
             particle_tree=tree,
             particle_xyz=pix_xyz,
         )
-        if verbose: total_query += time.perf_counter() - tq
+        if verbose:
+            total_query += time.perf_counter() - tq
 
         if len(pix_in_halos) == 0:
             continue
@@ -401,7 +436,8 @@ def paint_y_chunked(
         total_pixels += len(pix_in_halos)
 
         if use_weights:
-            if verbose: tw = time.perf_counter()
+            if verbose:
+                tw = time.perf_counter()
             weights = compute_weights(
                 pixel_indices=pix_in_halos,
                 distances=distances_flat,
@@ -410,36 +446,48 @@ def paint_y_chunked(
                 theta_200=theta_200_chunk,
                 particle_counts=particle_counts,
             )
-            if verbose: total_weight += time.perf_counter() - tw
+            if verbose:
+                total_weight += time.perf_counter() - tw
         else:
             weights = np.ones(len(pix_in_halos), dtype=np.float64)
 
-        if verbose: ti = time.perf_counter()
+        if verbose:
+            ti = time.perf_counter()
         log_M_chunk = np.log10(M_chunk)
         halo_indices_chunk = np.repeat(np.arange(len(M_chunk)), halo_counts)
 
         log_theta = np.log(distances_flat + 1e-40)
         log_M = log_M_chunk[halo_indices_chunk]
         z_arr = np.full_like(distances_flat, z, dtype=float)
-        if verbose: t_prep = time.perf_counter() - ti
+        if verbose:
+            t_prep = time.perf_counter() - ti
 
-        if verbose: t_interp_start = time.perf_counter()
-        y_iso = interpolator.eval_for_logs(log_theta, z_arr, log_M) # interp: get y values from interpolator
-        if verbose: t_interp_only = time.perf_counter() - t_interp_start
+        if verbose:
+            t_interp_start = time.perf_counter()
+        y_iso = interpolator.eval_for_logs(
+            log_theta, z_arr, log_M
+        )  # interp: get y values from interpolator
+        if verbose:
+            t_interp_only = time.perf_counter() - t_interp_start
 
         y_weighted = y_iso * weights
 
-        if verbose: t_accum_start = time.perf_counter() # accum: add the y values to the map
+        if verbose:
+            t_accum_start = time.perf_counter()  # accum: add the y values to the map
         np.add.at(y_map, pix_in_halos, y_weighted)
         if verbose:
             t_accum = time.perf_counter() - t_accum_start
             total_interp += t_prep + t_interp_only + t_accum
             # Log first chunk breakdown for insight
             if chunk_idx == 0:
-                print(f"  [chunk 0 breakdown] prep={t_prep:.3f}s, interp={t_interp_only:.3f}s, accum={t_accum:.3f}s")
+                print(
+                    f"  [chunk 0 breakdown] prep={t_prep:.3f}s, interp={t_interp_only:.3f}s, accum={t_accum:.3f}s"
+                )
 
     if verbose:
-        print(f"  --- Timing ({n_chunks} chunks, {total_pixels:,} pixel-halo pairs) ---")
+        print(
+            f"  --- Timing ({n_chunks} chunks, {total_pixels:,} pixel-halo pairs) ---"
+        )
         print(f"  query_tree:        {total_query:.3f}s")
         print(f"  compute_weights:   {total_weight:.3f}s")
         print(f"  interp+accumulate: {total_interp:.3f}s")
@@ -466,15 +514,31 @@ def paint_y_wrapper(
     """
     if method == "chunked":
         y_map = paint_y_chunked(
-            halo_theta, halo_phi, M_halos, particle_counts,
-            interpolator, z, nside, chunk_size, use_weights, verbose
+            halo_theta,
+            halo_phi,
+            M_halos,
+            particle_counts,
+            interpolator,
+            z,
+            nside,
+            chunk_size,
+            use_weights,
+            verbose,
         )
         return y_map, None, M_halos
 
     return paint_y(
-        halo_theta, halo_phi, M_halos, particle_counts,
-        interpolator, z, nside, use_weights, verbose
+        halo_theta,
+        halo_phi,
+        M_halos,
+        particle_counts,
+        interpolator,
+        z,
+        nside,
+        use_weights,
+        verbose,
     )
+
 
 def plot_zoom(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom.png"):
     """Zoom to brightest pixel."""
@@ -504,8 +568,16 @@ def plot_zoom(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom.p
     if halo_theta is not None and halo_phi is not None:
         halo_lon = np.degrees(halo_phi)
         halo_lat = 90.0 - np.degrees(halo_theta)
-        hp.projscatter(halo_lon, halo_lat, lonlat=True, marker='x',
-                       color='red', s=20, alpha=0.7, label='Halo centers')
+        hp.projscatter(
+            halo_lon,
+            halo_lat,
+            lonlat=True,
+            marker="x",
+            color="red",
+            s=20,
+            alpha=0.7,
+            label="Halo centers",
+        )
         plt.legend()
 
     plt.savefig(outpng, dpi=250, bbox_inches="tight")
@@ -513,7 +585,9 @@ def plot_zoom(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom.p
     print(f"Saved: {outpng}")
 
 
-def plot_ra_dec(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom_radec.png"):
+def plot_ra_dec(
+    y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom_radec.png"
+):
     """Zoom to specific RA/Dec."""
     ra_deg = 140.609
     dec_deg = -0.047
@@ -538,8 +612,16 @@ def plot_ra_dec(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom
     if halo_theta is not None and halo_phi is not None:
         halo_lon = np.degrees(halo_phi)
         halo_lat = 90.0 - np.degrees(halo_theta)
-        hp.projscatter(halo_lon, halo_lat, lonlat=True, marker='x',
-                       color='red', s=20, alpha=0.7, label='Halo centers')
+        hp.projscatter(
+            halo_lon,
+            halo_lat,
+            lonlat=True,
+            marker="x",
+            color="red",
+            s=20,
+            alpha=0.7,
+            label="Halo centers",
+        )
         plt.legend()
 
     plt.savefig(outpng, dpi=250, bbox_inches="tight")
@@ -549,7 +631,12 @@ def plot_ra_dec(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom
 
 def plot_Y_vs_M(M_halos, Y_per_halo, outpng="Y_vs_M.png", nbins_plot=80):
     """Binned log-log plot of integrated Y vs halo mass with weighted linear fit."""
-    mask = (M_halos > 0) & (Y_per_halo > 0) & np.isfinite(M_halos) & np.isfinite(Y_per_halo)
+    mask = (
+        (M_halos > 0)
+        & (Y_per_halo > 0)
+        & np.isfinite(M_halos)
+        & np.isfinite(Y_per_halo)
+    )
     logM = np.log10(M_halos[mask])
     logY = np.log10(Y_per_halo[mask])
 
@@ -573,23 +660,34 @@ def plot_Y_vs_M(M_halos, Y_per_halo, outpng="Y_vs_M.png", nbins_plot=80):
     # Weighted linear fit: logY = intercept + slope * logM
     # np.polyfit w = 1/sigma for WLS (it squares internally)
     coeffs, cov = np.polyfit(
-        centers[good], y_mean[good], 1,
-        w=1.0 / y_err[good], cov=True,
+        centers[good],
+        y_mean[good],
+        1,
+        w=1.0 / y_err[good],
+        cov=True,
     )
     slope, intercept = coeffs
     slope_err = np.sqrt(cov[0, 0])
 
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.errorbar(
-        centers[good], y_mean[good],
+        centers[good],
+        y_mean[good],
         yerr=y_err[good],
-        fmt='o', ms=4, capsize=2,
+        fmt="o",
+        ms=4,
+        capsize=2,
         label=r"Binned mean $\pm\,\sigma/\sqrt{N}$",
     )
 
     xx = np.linspace(centers[good].min(), centers[good].max(), 200)
-    ax.plot(xx, intercept + slope * xx, '-', lw=2,
-            label=f"Fit: slope = {slope:.3f} $\\pm$ {slope_err:.3f}")
+    ax.plot(
+        xx,
+        intercept + slope * xx,
+        "-",
+        lw=2,
+        label=f"Fit: slope = {slope:.3f} $\\pm$ {slope_err:.3f}",
+    )
 
     ax.set_xlabel(r"$\log_{10}\,M_{200c}\;[M_\odot]$")
     ax.set_ylabel(r"$\log_{10}\,Y_{200}\;[\mathrm{sr}]$")
@@ -651,20 +749,37 @@ def paint_abacus(
         hp.write_map(output_file, y_map, overwrite=True, nest=True)
         print(f"Saved to {output_file}")
 
-        plot_ra_dec(y_map, nside, halo_theta, halo_phi, output_file.replace('.fits', '_zoom_radec.png'))
+        plot_ra_dec(
+            y_map,
+            nside,
+            halo_theta,
+            halo_phi,
+            output_file.replace(".fits", "_zoom_radec.png"),
+        )
 
     if Y_per_halo is not None:
-        plot_Y_vs_M(M_halos_out, Y_per_halo,
-                     output_file.replace('.fits', '_Y_vs_M.png') if output_file else "Y_vs_M.png")
+        plot_Y_vs_M(
+            M_halos_out,
+            Y_per_halo,
+            output_file.replace(".fits", "_Y_vs_M.png")
+            if output_file
+            else "Y_vs_M.png",
+        )
 
     return y_map
 
 
 def main():
     halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-    healcounts_file1 = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
-    healcounts_file2 = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
-    healcounts_file3 = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0665-0670.asdf"
+    healcounts_file1 = (
+        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
+    )
+    healcounts_file2 = (
+        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
+    )
+    healcounts_file3 = (
+        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0665-0670.asdf"
+    )
     output_file = "y_map_abacus.fits"
 
     print(f"Painting Abacus tSZ map...")
@@ -674,33 +789,31 @@ def main():
     print(f"Healcounts file 3: {healcounts_file3}")
     print(f"Output file: {output_file}")
 
-    #interpolator = load_interpolator(JAX_PATH)
-    #redshift = 0.625
-    #nside = 2048
-    #method = "vectorized"
-    #use_weights = True
-    #halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
-    #_, _, particle_counts = create_mock_particle_data(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
+    # interpolator = load_interpolator(JAX_PATH)
+    # redshift = 0.625
+    # nside = 2048
+    # method = "vectorized"
+    # use_weights = True
+    # halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
+    # _, _, particle_counts = create_mock_particle_data(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
 
+    #    y_map_mock = paint_y_mock_data(
+    #        halo_theta=halo_theta,
+    #        halo_phi=halo_phi,
+    #        M_halos=M_halos,
+    #        particle_counts=particle_counts,
+    #        interpolator=interpolator,
+    #        z=Z,
+    #        nside=nside,
+    #        method=method,
+    #        use_weights=use_weights,
+    #        verbose=True,
+    #    )
 
-#    y_map_mock = paint_y_mock_data(
-#        halo_theta=halo_theta,
-#        halo_phi=halo_phi,
-#        M_halos=M_halos,
-#        particle_counts=particle_counts,
-#        interpolator=interpolator,
-#        z=Z,
-#        nside=nside,
-#        method=method,
-#        use_weights=use_weights,
-#        verbose=True,
-#    )
-
-#    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
-#    hp.graticule()
-#    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
-#    print("Saved visualization to y_map_abacus_mock.png")
-
+    #    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
+    #    hp.graticule()
+    #    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
+    #    print("Saved visualization to y_map_abacus_mock.png")
 
     y_map = paint_abacus(
         halo_dir=str(halo_dir),
@@ -712,7 +825,14 @@ def main():
         nside=NSIDE,
     )
 
-    hp.mollview(y_map, title="tSZ y-map on real data (z = 0.542)", unit="y", norm="log", min=1e-12, nest=True)
+    hp.mollview(
+        y_map,
+        title="tSZ y-map on real data (z = 0.542)",
+        unit="y",
+        norm="log",
+        min=1e-12,
+        nest=True,
+    )
     hp.graticule()
     plt.savefig("y_map_abacus_real.png", dpi=200, bbox_inches="tight")
     print("Saved visualization to y_map_abacus_real.png")

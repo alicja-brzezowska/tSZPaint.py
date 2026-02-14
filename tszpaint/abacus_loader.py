@@ -11,14 +11,15 @@ def comoving_to_sky(x, y, z):
     """
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(np.clip(z / r, -1.0, 1.0))
-    phi = np.arctan2(y, x) # better than arctan(y/x), as distinguishes quadrants 
-    phi = np.where(phi < 0, phi + 2 * np.pi, phi) # [condition, value if true, value if false]
+    phi = np.arctan2(y, x)  # better than arctan(y/x), as distinguishes quadrants
+    phi = np.where(
+        phi < 0, phi + 2 * np.pi, phi
+    )  # [condition, value if true, value if false]
     # ensures phi is in [0, 2pi]
     return theta, phi
 
 
 def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
-
     """Not in use; does not work with the lightcone data format."""
 
     wanted = set(wanted)
@@ -32,27 +33,28 @@ def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
             if k not in wanted:
                 continue
             v = v.strip()
-            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+            if (v.startswith('"') and v.endswith('"')) or (
+                v.startswith("'") and v.endswith("'")
+            ):
                 v = v[1:-1]
             out[k] = float(v)
             if len(out) == len(wanted):
                 break
-    return out    
-
+    return out
 
 
 def load_abacus_halos(
     halo_dir,
 ):
     halo_dir = Path(halo_dir)
-    with asdf.open(halo_dir ) as af:
+    with asdf.open(halo_dir) as af:
         h = af["header"]
         particle_mass = h["ParticleMassHMsun"]
         redshift = h["Redshift"]
 
         d = af["halo_lightcone"]
         positions = np.asarray(d["Interpolated_x_L2com"])
-        N_particles  = np.asarray(d["Interpolated_N"])
+        N_particles = np.asarray(d["Interpolated_N"])
 
         M_halo = N_particles.astype(np.float64) * particle_mass
 
@@ -64,16 +66,11 @@ def load_abacus_halos(
     return positions, N_particles, particle_mass, redshift
 
 
-
-
-
 def load_abacus_healcounts(filepath):
-    
     with asdf.open(filepath) as f:
-        #header = dict(f["headers"]) if "headers" in f else {} # or header_post 
-        particle_counts = np.array(f['data']['heal-counts'])
+        # header = dict(f["headers"]) if "headers" in f else {} # or header_post
+        particle_counts = np.array(f["data"]["heal-counts"])
     return particle_counts
-
 
 
 def load_abacus_for_painting(
@@ -95,6 +92,7 @@ def load_abacus_for_painting(
         return theta, phi, M_halos, particle_counts, redshift, halo_pixels
 
     return theta, phi, M_halos, particle_counts, redshift
+
 
 import psutil
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH

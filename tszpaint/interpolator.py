@@ -26,6 +26,7 @@ def linspace_from_julia_obj(julia_obj: dict[str, float | int]):
         julia_obj["len"],
     )
 
+
 @dataclass
 class BattagliaLogInterpolator:
     interpolator: Callable
@@ -38,7 +39,7 @@ class BattagliaLogInterpolator:
         redshifts: np.ndarray,
         log_masses: np.ndarray,
         prof_y: np.ndarray,
-        use_jax: bool = USE_JAX
+        use_jax: bool = USE_JAX,
     ):
         log_prof_y = np.log(prof_y + 1e-100)
         logger.debug(
@@ -55,29 +56,28 @@ class BattagliaLogInterpolator:
         )
 
         if use_jax:
-            lists = (jnp.asarray(log_thetas), jnp.asarray(redshifts), jnp.asarray(log_masses))
+            lists = (
+                jnp.asarray(log_thetas),
+                jnp.asarray(redshifts),
+                jnp.asarray(log_masses),
+            )
             log_prof_y = jnp.asarray(log_prof_y)
-            interpolator = RegularGridInterpolator(lists,
-                                          log_prof_y,
-                                          method = "linear",
-                                          bounds_error = False,
-                                          fill_value = None)
+            interpolator = RegularGridInterpolator(
+                lists, log_prof_y, method="linear", bounds_error=False, fill_value=None
+            )
 
         else:
             lists = (log_thetas, redshifts, log_masses)
-            interpolator = RegularGridInterpolator( lists,
-                                          log_prof_y,
-                                          method = "linear",
-                                          bounds_error = False,
-                                          fill_value = None)
+            interpolator = RegularGridInterpolator(
+                lists, log_prof_y, method="linear", bounds_error=False, fill_value=None
+            )
 
-        return cls(interpolator = interpolator, use_jax = use_jax)
+        return cls(interpolator=interpolator, use_jax=use_jax)
 
     @classmethod
     def from_csv(cls, path: Path):
         df = pd.read_csv(path)
         return cls.from_df(df)
-
 
     @classmethod
     def from_df(cls, df: pd.DataFrame, use_jax: bool = USE_JAX):
@@ -86,7 +86,6 @@ class BattagliaLogInterpolator:
         log_masses = df["log_masses"].to_numpy()
         prof_y = df["prof_y"].to_numpy()
         log_prof_y = np.log(prof_y + 1e-100).to_numpy()
-
 
     @classmethod
     def from_jld2(cls, path: Path):
@@ -117,7 +116,7 @@ class BattagliaLogInterpolator:
 
     def eval_for_logs(self, log_theta, z, log_M):
         if self.use_jax:
-            lists = jnp.stack([log_theta, z, log_M], axis = -1)
+            lists = jnp.stack([log_theta, z, log_M], axis=-1)
             log_y = self.interpolator(lists)
             return jnp.exp(log_y)
         else:
@@ -128,7 +127,7 @@ class BattagliaLogInterpolator:
         if self.use_jax:
             log_theta = jnp.log(theta)
             log_M = jnp.log10(m)
-            lists = jnp.stack([log_theta, z, log_M], axis = -1)
+            lists = jnp.stack([log_theta, z, log_M], axis=-1)
             log_y = self.interpolator(lists)
             return jnp.exp(log_y)
 

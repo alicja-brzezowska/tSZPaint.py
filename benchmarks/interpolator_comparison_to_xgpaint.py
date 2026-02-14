@@ -5,9 +5,9 @@ from loguru import logger
 from tszpaint.interpolator import BattagliaLogInterpolator
 from tszpaint.config import DATA_PATH
 
-PYTHON_PATH = DATA_PATH/ "y_values_python.pkl"
+PYTHON_PATH = DATA_PATH / "y_values_python.pkl"
 JULIA_PATH = DATA_PATH / "battaglia_interpolation.jld2"
-JAX_PATH = DATA_PATH/ "y_values_jax_2.pkl"
+JAX_PATH = DATA_PATH / "y_values_jax_2.pkl"
 
 LOG_THETA_MIN = -7.5
 LOG_THETA_MAX = 0.5
@@ -16,9 +16,9 @@ Z_MAX = 5.0
 LOG_M_MIN = 11.0
 LOG_M_MAX = 15.7
 
-#constants:
-z = 0.5            
-theta = 1e-4   
+# constants:
+z = 0.5
+theta = 1e-4
 
 EPS = 1e-3
 
@@ -32,18 +32,19 @@ def get_random_points(num_per_dim: int = 10):
 
     return np.meshgrid(log_thetas, zs, log_ms, indexing="ij")
 
-if __name__ == "__main__": 
-    python_interpolator = BattagliaLogInterpolator.from_pickle(PYTHON_PATH) 
-    logger.info("built JAX interpolator from grid") 
-    julia_interpolator = BattagliaLogInterpolator.from_jld2(JULIA_PATH) 
-    print("Built julia interpolator from grid") 
-    jax_interpolator = BattagliaLogInterpolator.from_pickle(JAX_PATH) 
-    print("Built JAX interpolator from grid") 
-    
-    log_thetas, zs, log_ms = get_random_points() 
-    python_vals = python_interpolator.eval_for_logs(log_thetas, zs, log_ms) 
-    julia_vals = julia_interpolator.eval_for_logs(log_thetas, zs, log_ms) 
-    JAX_vals = jax_interpolator.eval_for_logs(log_thetas, zs, log_ms) 
+
+if __name__ == "__main__":
+    python_interpolator = BattagliaLogInterpolator.from_pickle(PYTHON_PATH)
+    logger.info("built JAX interpolator from grid")
+    julia_interpolator = BattagliaLogInterpolator.from_jld2(JULIA_PATH)
+    print("Built julia interpolator from grid")
+    jax_interpolator = BattagliaLogInterpolator.from_pickle(JAX_PATH)
+    print("Built JAX interpolator from grid")
+
+    log_thetas, zs, log_ms = get_random_points()
+    python_vals = python_interpolator.eval_for_logs(log_thetas, zs, log_ms)
+    julia_vals = julia_interpolator.eval_for_logs(log_thetas, zs, log_ms)
+    JAX_vals = jax_interpolator.eval_for_logs(log_thetas, zs, log_ms)
 
     relative_errors = np.abs(python_vals - julia_vals) / np.maximum(
         np.abs(julia_vals), 1e-12
