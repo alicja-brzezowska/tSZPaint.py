@@ -9,30 +9,6 @@ from tszpaint.config import HALO_CATALOGS_PATH
 from tszpaint.converters import convert_comoving_to_sky
 
 
-def load_abacus_header(header_path, wanted=("ParticleMassMsun", "Redshift")):
-    """Not in use; does not work with the lightcone data format."""
-
-    wanted = set(wanted)
-    out = {}
-    with open(header_path, "r") as f:
-        for line in f:
-            if "=" not in line or line.startswith("#"):
-                continue
-            k, v = line.split("=", 1)
-            k = k.strip()
-            if k not in wanted:
-                continue
-            v = v.strip()
-            if (v.startswith('"') and v.endswith('"')) or (
-                v.startswith("'") and v.endswith("'")
-            ):
-                v = v[1:-1]
-            out[k] = float(v)
-            if len(out) == len(wanted):
-                break
-    return out
-
-
 def load_abacus_halos(
     halo_dir,
 ):
