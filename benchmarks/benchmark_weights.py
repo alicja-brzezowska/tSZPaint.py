@@ -21,7 +21,7 @@ def create_mock_halo_catalog(n_halos: int, seed: int = 123):
     halo_theta = np.pi * rng.random(n_halos)
     halo_phi = 2 * np.pi * rng.random(n_halos)
     log_M = rng.uniform(13.5, 15.5, size=n_halos)
-    M_halos = 10.0 ** log_M
+    M_halos = 10.0**log_M
     return halo_theta, halo_phi, M_halos
 
 
@@ -48,7 +48,6 @@ def benchmark_paint(
     Benchmark weighted vs unweighted painting.
     """
     halo_theta, halo_phi, M_halos = create_mock_halo_catalog(n_halos)
-
 
     _ = paint_y(
         halo_theta=halo_theta,
@@ -124,8 +123,12 @@ def main():
         )
         results.append(result)
 
-        print(f"  Weighted:   {result['weighted_mean']:.2f} ± {result['weighted_std']:.2f} s")
-        print(f"  Unweighted: {result['unweighted_mean']:.2f} ± {result['unweighted_std']:.2f} s")
+        print(
+            f"  Weighted:   {result['weighted_mean']:.2f} ± {result['weighted_std']:.2f} s"
+        )
+        print(
+            f"  Unweighted: {result['unweighted_mean']:.2f} ± {result['unweighted_std']:.2f} s"
+        )
 
     output_file = Path("benchmark_weights.csv")
     with open(output_file, "w", newline="") as f:
@@ -136,10 +139,14 @@ def main():
     print(f"\nResults saved to {output_file}")
 
     print("\n" + "=" * 70)
-    print(f"{'N Halos':>10} | {'Weighted (s)':>14} | {'Unweighted (s)':>14} | {'Overhead':>10}")
+    print(
+        f"{'N Halos':>10} | {'Weighted (s)':>14} | {'Unweighted (s)':>14} | {'Overhead':>10}"
+    )
     print("-" * 70)
     for r in results:
-        print(f"{r['n_halos']:>10,} | {r['weighted_mean']:>14.2f} | {r['unweighted_mean']:>14.2f} | {r['overhead_ratio']:>10.2f}x")
+        print(
+            f"{r['n_halos']:>10,} | {r['weighted_mean']:>14.2f} | {r['unweighted_mean']:>14.2f} | {r['overhead_ratio']:>10.2f}x"
+        )
     print("=" * 70)
 
 

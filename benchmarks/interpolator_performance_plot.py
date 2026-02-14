@@ -1,4 +1,3 @@
-
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -55,23 +54,25 @@ def visualize_benchmark(df: pd.DataFrame):
     df["npoints"] = df["dimension"] ** 3
 
     # Paper-style defaults
-    plt.rcParams.update({
-        "font.size": 14,
-        "axes.labelsize": 16,
-        "axes.titlesize": 18,
-        "legend.fontsize": 14,
-        "xtick.labelsize": 14,
-        "ytick.labelsize": 14,
-        "lines.linewidth": 2.2,
-        "lines.markersize": 6,
-    })
+    plt.rcParams.update(
+        {
+            "font.size": 14,
+            "axes.labelsize": 16,
+            "axes.titlesize": 18,
+            "legend.fontsize": 14,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+            "lines.linewidth": 2.2,
+            "lines.markersize": 6,
+        }
+    )
 
     fig, ax = plt.subplots(figsize=(7.5, 5.5))
 
     # Professional, muted palette
     styles = {
         "numpy": dict(color="#4C72B0", linestyle="-", marker="o"),
-        "jax":   dict(color="#55A868", linestyle="-", marker="s"),
+        "jax": dict(color="#55A868", linestyle="-", marker="s"),
         "julia": dict(color="#CC3E43", linestyle="-", marker="^"),
     }
 
@@ -100,14 +101,12 @@ def visualize_benchmark(df: pd.DataFrame):
     plt.show()
 
 
-
-
 if __name__ == "__main__":
     df = pd.read_csv("benchmark_y_profile.csv")
     # julia values go here
     julia_df = pd.DataFrame(
         [
-            {"dimension": 16, "backend": "julia", "time": 1.13 },
+            {"dimension": 16, "backend": "julia", "time": 1.13},
             {"dimension": 32, "backend": "julia", "time": 2.07},
             {"dimension": 64, "backend": "julia", "time": 9.67},
             {"dimension": 128, "backend": "julia", "time": 73.13},

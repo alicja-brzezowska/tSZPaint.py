@@ -7,7 +7,7 @@ import astropy.constants as aconst
 import astropy.units as au
 from scipy.integrate import quad_vec
 
-from tszpaint.config import DATA_PATH  
+from tszpaint.config import DATA_PATH
 
 
 class Battaglia16ThermalSZProfile:
@@ -33,7 +33,7 @@ def get_params(M_200, z):
     beta = 4.35 * m**0.0393 * z1**0.415
     alpha = 1.0
     gamma = -0.3
-    beta = gamma - alpha * beta 
+    beta = gamma - alpha * beta
 
     return xc, alpha, beta, gamma, P0
 
@@ -103,7 +103,6 @@ def compton_y(model, r, M_200c, z):
     return P_e * P_E_FACTOR
 
 
-
 def build_python_grid(
     log_theta_min=-25.4,
     log_theta_max=11.5,
@@ -116,7 +115,6 @@ def build_python_grid(
     N_log_M=64,
     outfile: Path | None = None,
 ):
-
     model = create_battaglia_profile()
 
     log_thetas = np.linspace(log_theta_min, log_theta_max, N_log_theta)
@@ -150,7 +148,6 @@ def build_python_grid(
         print(f"Saved Python grid to {outfile}")
 
     return log_thetas, redshifts, log_masses, Y
-
 
 
 if __name__ == "__main__":
