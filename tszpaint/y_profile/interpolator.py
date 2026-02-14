@@ -1,14 +1,12 @@
 import pickle
 from dataclasses import dataclass
-from typing import Any, Callable
 from pathlib import Path
-from loguru import logger
+from typing import Callable
 
 import h5py
-import numpy as np
-import pandas as pd
 import jax.numpy as jnp
-
+import numpy as np
+from loguru import logger
 
 DEBUG = True
 USE_JAX = True
@@ -73,19 +71,6 @@ class BattagliaLogInterpolator:
             )
 
         return cls(interpolator=interpolator, use_jax=use_jax)
-
-    @classmethod
-    def from_csv(cls, path: Path):
-        df = pd.read_csv(path)
-        return cls.from_df(df)
-
-    @classmethod
-    def from_df(cls, df: pd.DataFrame, use_jax: bool = USE_JAX):
-        log_thetas = df["log_thetas"].to_numpy()
-        redshifts = df["redshifts"].to_numpy()
-        log_masses = df["log_masses"].to_numpy()
-        prof_y = df["prof_y"].to_numpy()
-        log_prof_y = np.log(prof_y + 1e-100).to_numpy()
 
     @classmethod
     def from_jld2(cls, path: Path):
