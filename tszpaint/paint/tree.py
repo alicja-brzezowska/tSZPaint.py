@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from tszpaint.converters import convert_cart_to_rad, convert_rad_to_cart
-from tszpaint.decorators import timer
+from tszpaint.decorators import time_calls, trace_calls
 from tszpaint.paint.config import PainterConfig
 
 
@@ -19,7 +19,8 @@ def angular_separation(
     return 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
 
-@timer
+@time_calls
+@trace_calls
 def build_tree(config: PainterConfig):
     """
     Build a 3D KDTree of HEALPix pixels.
@@ -33,7 +34,8 @@ def build_tree(config: PainterConfig):
     return tree, pix_xyz, pix_indices  # NOTE: do i need pix_xyz?
 
 
-@timer
+@time_calls
+@trace_calls
 def query_tree(
     config: PainterConfig,
     halo_xyz: np.ndarray,

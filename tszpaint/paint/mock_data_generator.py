@@ -1,8 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import healpy as hp
 import numpy as np
 
+from tszpaint.decorators import trace_calls
 from tszpaint.paint.abacus_loader import SimulationData
 from tszpaint.y_profile.y_profile import compute_R_delta, create_battaglia_profile
 
@@ -21,13 +22,17 @@ class MockDataGenerator:
     """
 
     n_halos: int
-    n_pixels: int
+    n_pixels: int = field(init=False)
     nside: int
     baseline_density: float = 1e9
     overdensity_sigma: float = 2.0
     redshift: float = 0.5
     seed: int = RNG_SEED
 
+    def __post_init__(self):
+        self.n_pixels = hp.nside2npix(self.nside)
+
+    @trace_calls
     def generate_mock_particle_counts(self):
         """Create mock data of particle counts, mimicking Abacussummit data structure."""
         rng = np.random.default_rng(seed=self.seed)
@@ -38,6 +43,7 @@ class MockDataGenerator:
         particle_counts = rng.poisson(lam=lam).astype(int)
         return particle_counts
 
+    @trace_calls
     def create_mock_halo_catalogs(self):
         """Create halo-catalog mock data for testing."""
         model = create_battaglia_profile()
@@ -49,6 +55,7 @@ class MockDataGenerator:
         radii = compute_R_delta(model, m_halos, self.redshift)
         return halo_theta, halo_phi, m_halos, radii
 
+    @trace_calls
     def generate_simulation_data(self):
         theta, phi, m_halos, radii = self.create_mock_halo_catalogs()
         particle_counts = self.generate_mock_particle_counts()

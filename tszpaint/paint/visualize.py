@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
 
+from tszpaint.decorators import time_calls
 from tszpaint.paint.abacus_loader import SimulationData
 
 
@@ -33,6 +34,7 @@ class Visualizer:
             plt.show()
         plt.close()
 
+    @time_calls
     def plot_zoom(self):
         """Zoom to brightest pixel."""
         ipix = int(np.nanargmax(self.y_map))
@@ -71,6 +73,7 @@ class Visualizer:
         plt.legend()
         self.finalize_plot("y_zoom")
 
+    @time_calls
     def plot_ra_dec(self):
         """Zoom to specific RA/Dec."""
         ra_deg = 140.609
@@ -106,10 +109,10 @@ class Visualizer:
         plt.legend()
         self.finalize_plot("ra_dec")
 
+    @time_calls
     def plot_Y_vs_M(
         self,
-        outpng="Y_vs_M.png",
-        nbins_plot=80,
+        nbins_plot: int = 80,
     ):
         """Binned log-log plot of integrated Y vs halo mass with weighted linear fit."""
         mask = (
@@ -179,10 +182,11 @@ class Visualizer:
         print(f"  Slope = {slope:.3f} +/- {slope_err:.3f}")
         print(f"  Intercept = {intercept:.3f}")
 
+    @time_calls
     def visualize_y_map(self):
         hp.mollview(
             self.y_map,
-            title="tSZ y-map on real data (z = 0.542)",
+            title="tSZ y-map (z = 0.542)",
             unit="y",
             norm="log",
             min=1e-12,

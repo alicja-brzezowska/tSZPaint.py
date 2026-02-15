@@ -1,11 +1,10 @@
 import numpy as np
-from numba import jit, prange
+from numba import prange
 
-from tszpaint.decorators import timer
+from tszpaint.decorators import time_calls, trace_calls
 from tszpaint.paint.config import PainterConfig
 
 
-@jit(nopython=True, parallel=True, cache=True)
 def weights_mechanism(
     config: PainterConfig,
     distances: np.ndarray,
@@ -81,7 +80,8 @@ def weights_mechanism(
     return weights
 
 
-@timer
+@time_calls
+@trace_calls
 def compute_weights(
     config: PainterConfig,
     pixel_indices: np.ndarray,

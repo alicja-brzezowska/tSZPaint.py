@@ -14,14 +14,15 @@ MOCK = True
 
 
 def main():
-    config = PainterConfig(NSIDE, N, N_BINS)
-
     if MOCK:
-        gen = MockDataGenerator(100_000, 100_000_000, NSIDE)
+        nside = 1024
+        config = PainterConfig(nside, N, N_BINS)
+        gen = MockDataGenerator(100, nside=nside)
         data = gen.generate_simulation_data()
         paint_and_visualize(config, data, None)
 
     else:
+        config = PainterConfig(NSIDE, N, N_BINS)
         halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
         healcounts_file1 = (
             HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
