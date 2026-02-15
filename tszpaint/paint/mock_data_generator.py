@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
+import healpy as hp
 import numpy as np
+
+from tszpaint.paint.abacus_loader import SimulationData
+from tszpaint.y_profile.y_profile import compute_R_delta, create_battaglia_profile
 
 RNG_SEED = 17
 
@@ -18,8 +22,10 @@ class MockDataGenerator:
 
     n_halos: int
     n_pixels: int
+    nside: int
     baseline_density: float = 1e9
     overdensity_sigma: float = 2.0
+    redshift: float = 0.5
     seed: int = RNG_SEED
 
     def generate_mock_particle_counts(self):
@@ -34,9 +40,19 @@ class MockDataGenerator:
 
     def create_mock_halo_catalogs(self):
         """Create halo-catalog mock data for testing."""
+        model = create_battaglia_profile()
         rng = np.random.default_rng(RNG_SEED)
         halo_theta = np.pi * rng.random(self.n_halos)
         halo_phi = 2 * np.pi * rng.random(self.n_halos)
         logM = rng.uniform(15.5, 16.5, size=self.n_halos)
         m_halos = 10.0**logM
-        return halo_theta, halo_phi, m_halos
+        radii = compute_R_delta(model, m_halos, self.redshift)
+        return halo_theta, halo_phi, m_halos, radii
+
+    def generate_simulation_data(self):
+        theta, phi, m_halos, radii = self.create_mock_halo_catalogs()
+        particle_counts = self.generate_mock_particle_counts()
+        halo_pixels = hp.ang2pix(self.nside, theta, phi, nest=True)
+        return SimulationData(
+            theta, phi, m_halos, particle_counts, self.redshift, halo_pixels, radii
+        )

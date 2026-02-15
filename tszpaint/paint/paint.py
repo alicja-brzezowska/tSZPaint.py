@@ -111,11 +111,19 @@ def paint_y_wrapper(
         data.m_halos,
         data.particle_counts,
         interpolator,
-        data.radius,
+        data.radii_halos,
         data.redshift,
         config.nside,
         use_weights,
     )
+
+
+def display_map_statistics(y_map: np.ndarray):
+    logger.info("\nMap statistics:")
+    logger.info(f"  Min: {y_map.min():.3e}")
+    logger.info(f"  Max: {y_map.max():.3e}")
+    logger.info(f"  Mean: {y_map.mean():.3e}")
+    logger.info(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
 
 
 def paint_abacus(
@@ -125,7 +133,6 @@ def paint_abacus(
     healcounts_file_2: Path,
     healcounts_file_3: Path,
     output_file: str,
-    nside: int,
     interpolator_path: Path = JAX_PATH,
     use_weights: bool = True,
 ):
@@ -137,31 +144,31 @@ def paint_abacus(
         healcounts_file_1=healcounts_file_1,
         healcounts_file_2=healcounts_file_2,
         healcounts_file_3=healcounts_file_3,
-        nside=nside,
+        nside=config.nside,
     )
+    paint_and_visualize(config, data, output_file, interpolator_path, use_weights)
 
+
+def paint_and_visualize(
+    config: PainterConfig,
+    data: SimulationData,
+    output_file: str | None = None,
+    interpolator_path: Path = JAX_PATH,
+    use_weights: bool = True,
+):
     interpolator = load_interpolator(interpolator_path)
-
-    logger.info("Painting y-map ...")
     y_map, y_per_halo = paint_y_wrapper(
         config,
         data,
         interpolator=interpolator,
         use_weights=use_weights,
     )
-
-    logger.info("\nMap statistics:")
-    logger.info(f"  Min: {y_map.min():.3e}")
-    logger.info(f"  Max: {y_map.max():.3e}")
-    logger.info(f"  Mean: {y_map.mean():.3e}")
-    logger.info(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
-
+    display_map_statistics(y_map)
     if output_file:
         hp.write_map(output_file, y_map, overwrite=True, nest=True)
         logger.info(f"Saved to {output_file}")
 
-        vis = Visualizer(data, y_map, y_per_halo, config.nside)
-        vis.plot_ra_dec(output_file.replace(".fits", "_zoom_radec.png"))
-        vis.plot_Y_vs_M(output_file.replace(".fits", "_y_vs_m.png"))
-
-    return y_map
+        vis = Visualizer(data, y_map, y_per_halo, config.nside, None)
+        vis.plot_ra_dec()
+        vis.plot_Y_vs_M()
+        vis.visualize_y_map()

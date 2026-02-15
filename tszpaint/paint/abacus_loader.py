@@ -16,7 +16,7 @@ class SimulationData:
     particle_counts: np.ndarray
     redshift: float
     halo_pixels: np.ndarray
-    radius: np.ndarray
+    radii_halos: np.ndarray
 
 
 def load_abacus_halos(
