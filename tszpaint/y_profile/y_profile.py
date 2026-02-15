@@ -1,10 +1,10 @@
 import pickle
 from pathlib import Path
-import numpy as np
 
-from astropy.cosmology import FlatLambdaCDM
 import astropy.constants as aconst
 import astropy.units as au
+import numpy as np
+from astropy.cosmology import FlatLambdaCDM
 from scipy.integrate import quad_vec
 
 from tszpaint.config import DATA_PATH
@@ -62,7 +62,7 @@ def compute_R_delta(model, M_200, z, delta=200):
     return R
 
 
-def angular_size(model, physical_size, z):
+def angular_size(model, physical_size, z) -> np.ndarray:
     """Convert physical size (Mpc) to angular size (radians)."""
     d_A = model.cosmo.angular_diameter_distance(z).to(au.Mpc).value
     return np.arctan(physical_size / d_A)

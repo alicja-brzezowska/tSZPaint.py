@@ -10,6 +10,7 @@ from tszpaint.config import (
     INTERPOLATORS_PATH,
 )
 from tszpaint.converters import convert_rad_to_cart
+from tszpaint.cosmology.model import get_angular_size_from_comoving
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.tree import build_tree, query_tree
@@ -17,9 +18,6 @@ from tszpaint.paint.visualize import Visualizer
 from tszpaint.paint.weights import compute_weights
 from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile.y_profile import (
-    Battaglia16ThermalSZProfile,
-    angular_size,
-    compute_R_delta,
     create_battaglia_profile,
 )
 
@@ -35,17 +33,6 @@ JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
 JULIA_PATH = INTERPOLATORS_PATH / "battaglia_interpolation.jld2"
 
 
-def compute_theta_200(
-    model: Battaglia16ThermalSZProfile,
-    M_halos: np.ndarray,
-    Z: float = 0.5,
-    delta: int = 200,
-):
-    """Compute θ_200 (angular radius) for each halo."""
-    R_200 = compute_R_delta(model, M_halos, Z, delta=delta)
-    return angular_size(model, R_200, Z)
-
-
 def load_interpolator(path: Path = JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
 
@@ -57,6 +44,7 @@ def paint_y(
     M_halos: np.ndarray,
     particle_counts: np.ndarray,
     interpolator: BattagliaLogInterpolator,
+    radius: np.ndarray,
     z: float = Z,
     nside: int = NSIDE,
     use_weights: bool = True,
@@ -71,7 +59,7 @@ def paint_y(
     npix = len(pix_indices)
 
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
-    theta_200 = compute_theta_200(MODEL, M_halos, Z=z, delta=200)
+    theta_200 = get_angular_size_from_comoving(MODEL, radius, z)
 
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
         config=config,
@@ -131,6 +119,7 @@ def paint_y_wrapper(
         data.m_halos,
         data.particle_counts,
         interpolator,
+        data.radius,
         data.redshift,
         config.nside,
         use_weights,
