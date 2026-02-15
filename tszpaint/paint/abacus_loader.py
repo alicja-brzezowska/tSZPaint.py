@@ -16,12 +16,12 @@ class SimulationData:
     particle_counts: np.ndarray
     redshift: float
     halo_pixels: np.ndarray
+    radius: np.ndarray
 
 
 def load_abacus_halos(
-    halo_dir,
+    halo_dir: Path,
 ):
-    halo_dir = Path(halo_dir)
     with asdf.open(halo_dir) as af:
         h = af["header"]
         particle_mass = h["ParticleMassHMsun"]
@@ -29,16 +29,25 @@ def load_abacus_halos(
 
         d = af["halo_lightcone"]
         positions = np.asarray(d["Interpolated_x_L2com"])
-        N_particles = np.asarray(d["Interpolated_N"])
+        num_particles = np.asarray(d["Interpolated_N"])
+        halo_timeslice_index = np.asarray(d["halo_timeslice_index"])
 
-        M_halo = N_particles.astype(np.float64) * particle_mass
+        m_halos = num_particles.astype(np.float64) * particle_mass
+
+        threshold = 1e13
+        mask = m_halos > threshold
 
         # filter out low-mass halos for painting
-        positions = positions[M_halo > 10**13]
-        N_particles = N_particles[M_halo > 10**13]
-        M_halo = M_halo[M_halo > 10**13]
+        positions = positions[mask]
+        num_particles = num_particles[mask]
+        m_halos = m_halos[mask]
+        halo_timeslice_index = halo_timeslice_index[mask]
 
-    return positions, N_particles, particle_mass, redshift
+        e = af["halo_timeslice"]
+        radius = np.asarray(e["r90_L2com_i16"], dtype=np.float64)
+        radius = radius[halo_timeslice_index]
+
+    return positions, num_particles, particle_mass, redshift, radius
 
 
 def load_abacus_healcounts(filepath: Path):
@@ -65,16 +74,18 @@ def load_abacus_for_painting(
     healcounts_file_1: Path,
     healcounts_file_2: Path,
     healcounts_file_3: Path,
-    nside=1024,
+    nside: int = 1024,
 ):
-    pos, N_particles, particle_mass, redshift = load_abacus_halos(halo_dir)
+    pos, num_particles, particle_mass, redshift, radius = load_abacus_halos(halo_dir)
 
     theta, phi = convert_comoving_to_sky(pos)
 
-    M_halos = N_particles.astype(np.float64) * particle_mass
+    m_halos = num_particles.astype(np.float64) * particle_mass
     particle_counts = load_multiple_healcounts(
         healcounts_file_1, healcounts_file_2, healcounts_file_3
     )
     halo_pixels = hp.ang2pix(nside, theta, phi, nest=True)
 
-    return SimulationData(theta, phi, M_halos, particle_counts, redshift, halo_pixels)
+    return SimulationData(
+        theta, phi, m_halos, particle_counts, redshift, halo_pixels, radius
+    )
