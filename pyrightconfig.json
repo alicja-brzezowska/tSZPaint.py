@@ -1,0 +1,5 @@
+{
+    "reportExplicitAny": "none",
+    "reportUnusedCallResult": "none",
+    "reportUnknownMemberType": "none"
+}
