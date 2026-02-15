@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import healpy as hp
-import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
 
@@ -14,7 +13,7 @@ from tszpaint.converters import convert_rad_to_cart
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.tree import build_tree, query_tree
-from tszpaint.paint.visualize import plot_ra_dec, plot_Y_vs_M
+from tszpaint.paint.visualize import Visualizer
 from tszpaint.paint.weights import compute_weights
 from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile.y_profile import (
@@ -109,11 +108,11 @@ def paint_y(
     y_map = np.zeros(npix, dtype=float)
     np.add.at(y_map, pix_in_halos, y_values_with_weight)
 
-    Y_per_halo = np.bincount(
+    y_per_halo = np.bincount(
         halo_indices, weights=y_values_with_weight, minlength=len(M_halos)
     )
 
-    return y_map, Y_per_halo, M_halos
+    return y_map, y_per_halo
 
 
 def paint_y_wrapper(
@@ -163,7 +162,7 @@ def paint_abacus(
     interpolator = load_interpolator(interpolator_path)
 
     logger.info("Painting y-map ...")
-    y_map, Y_per_halo, M_halos_out = paint_y_wrapper(
+    y_map, y_per_halo = paint_y_wrapper(
         config,
         data,
         interpolator=interpolator,
@@ -180,22 +179,9 @@ def paint_abacus(
         hp.write_map(output_file, y_map, overwrite=True, nest=True)
         logger.info(f"Saved to {output_file}")
 
-        plot_ra_dec(
-            y_map,
-            nside,
-            data.theta,
-            data.phi,
-            output_file.replace(".fits", "_zoom_radec.png"),
-        )
-
-    if Y_per_halo is not None:
-        plot_Y_vs_M(
-            M_halos_out,
-            Y_per_halo,
-            output_file.replace(".fits", "_Y_vs_M.png")
-            if output_file
-            else "Y_vs_M.png",
-        )
+        vis = Visualizer(data, y_map, y_per_halo, config.nside)
+        vis.plot_ra_dec(output_file.replace(".fits", "_zoom_radec.png"))
+        vis.plot_Y_vs_M(output_file.replace(".fits", "_y_vs_m.png"))
 
     return y_map
 
@@ -221,33 +207,7 @@ def main():
     logger.info(f"Output file: {output_file}")
     config = PainterConfig(NSIDE, N, N_BINS)
 
-    # interpolator = load_interpolator(JAX_PATH)
-    # redshift = 0.625
-    # nside = 2048
-    # method = "vectorized"
-    # use_weights = True
-    # halo_theta, halo_phi, M_halos = create_mock_halo_catalogs(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
-    # _, _, particle_counts = create_mock_particle_data(NPIX=hp.nside2npix(nside), m=np.arange(hp.nside2npix(nside)))
-
-    #    y_map_mock = paint_y_mock_data(
-    #        halo_theta=halo_theta,
-    #        halo_phi=halo_phi,
-    #        M_halos=M_halos,
-    #        particle_counts=particle_counts,
-    #        interpolator=interpolator,
-    #        z=Z,
-    #        nside=nside,
-    #        method=method,
-    #        use_weights=use_weights,
-    #        verbose=True,
-    #    )
-
-    #    hp.mollview(y_map_mock, title="tSZ y-map on mock data (z = 0.625)", unit="y", norm="log", min=1e-12)
-    #    hp.graticule()
-    #    plt.savefig("y_map_mock.png", dpi=200, bbox_inches="tight")
-    #    logger.info("Saved visualization to y_map_abacus_mock.png")
-
-    y_map = paint_abacus(
+    paint_abacus(
         config,
         halo_dir=halo_dir,
         healcounts_file_1=healcounts_file1,
@@ -256,18 +216,6 @@ def main():
         output_file=output_file,
         nside=NSIDE,
     )
-
-    hp.mollview(
-        y_map,
-        title="tSZ y-map on real data (z = 0.542)",
-        unit="y",
-        norm="log",
-        min=1e-12,
-        nest=True,
-    )
-    hp.graticule()
-    plt.savefig("y_map_abacus_real.png", dpi=200, bbox_inches="tight")
-    logger.info("Saved visualization to y_map_abacus_real.png")
 
 
 if __name__ == "__main__":
