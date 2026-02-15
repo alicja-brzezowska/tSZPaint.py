@@ -6,6 +6,10 @@ import psutil
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 import matplotlib.pyplot as plt
 
+from tszpaint.y_profile import (
+    Battaglia16ThermalSZProfile,
+    angular_size,
+)
 
 def comoving_to_sky(x, y, z):
     """
@@ -56,16 +60,24 @@ def load_abacus_halos(
         d = af["halo_lightcone"]
         positions = np.asarray(d["Interpolated_x_L2com"])
         N_particles  = np.asarray(d["Interpolated_N"])
+        halo_timeslice_index = np.asarray(d["halo_timeslice_index"])
 
         M_halo = N_particles.astype(np.float64) * particle_mass
+        # filter out low-mass halos 
+        threshold = 1e13
+        mask = M_halo > threshold
 
-        # filter out low-mass halos for painting
-        positions = positions[M_halo > 10**13]
-        N_particles = N_particles[M_halo > 10**13]
-        M_halo = M_halo[M_halo > 10**13]
+        positions = positions[mask]
+        N_particles = N_particles[mask]
+        M_halo = M_halo[mask]
+        halo_timeslice_index = halo_timeslice_index[mask]
 
-    return positions, N_particles, particle_mass, redshift
+        e = af["halo_timeslice"]
+        radius = np.asarray(e["r90_L2com_i16"], dtype=np.float64) 
+        radius = radius[halo_timeslice_index] # match up with halo positions
 
+
+    return positions, N_particles, particle_mass, redshift, radius
 
 
 def load_abacus_healcounts(filepath):
@@ -93,7 +105,7 @@ def load_abacus_for_painting(
     nside=1024,
     return_pixels=False,
 ):
-    pos, N_particles, particle_mass, redshift = load_abacus_halos(halo_dir)
+    pos, N_particles, particle_mass, redshift, radius = load_abacus_halos(halo_dir)
 
     x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
     theta, phi = comoving_to_sky(x, y, z)
@@ -102,16 +114,9 @@ def load_abacus_for_painting(
     particle_counts = load_multiple_healcounts(healcounts_file_1, healcounts_file_2, healcounts_file_3)
 
     if return_pixels:
-        halo_pixels = hp.ang2pix(nside, theta, phi, nest = True)
-        return theta, phi, M_halos, particle_counts, redshift, halo_pixels
+        halo_pixels = hp.ang2pix(nside, theta, phi, nest=True)
+        return theta, phi, M_halos, radius, particle_counts, redshift, halo_pixels
 
-    return theta, phi, M_halos, particle_counts, redshift
+    return theta, phi, M_halos, radius, particle_counts, redshift
 
-import psutil
-from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 
-halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-
-positions, N_particles, pm, z = load_abacus_halos(halo_dir)
-mem_used = psutil.Process().memory_info().rss / 1e9  # GB
-print(f"Memory after loading: {mem_used:.2f} GB")

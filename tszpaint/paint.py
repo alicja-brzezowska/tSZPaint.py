@@ -17,13 +17,13 @@ from tszpaint.y_profile import (
     angular_size,
 )
 from tszpaint.interpolator import BattagliaLogInterpolator
-from tszpaint.config import DATA_PATH, ABACUS_DATA_PATH, INTERPOLATORS_PATH, HALO_CATALOGS_PATH, HEALCOUNTS_PATH
+from tszpaint.config import DATA_PATH, ABACUS_DATA_PATH, INTERPOLATORS_PATH, HALO_CATALOGS_PATH, HEALCOUNTS_TOTAL_PATH
 from tszpaint.abacus_loader import load_abacus_for_painting
 
 # HEALPix
 NSIDE = 8192
 Z = 0.5 # FOR MOCK DATA
-N = 2 # Multiple of theta_200 to search
+N = 1 # Multiple of theta_200 to search
 nbins = 20 # NOTE: THINK how many bins!
 
 MODEL = create_battaglia_profile()
@@ -78,16 +78,11 @@ def convert_rad_to_cart(theta, phi):
     return xyz
 
 
-def compute_theta_200(
-    model: Battaglia16ThermalSZProfile,
-    M_halos: np.ndarray,
-    Z: float = 0.5,
-    delta: int = 200,
-):
-    """Compute θ_200 (angular radius) for each halo."""
-    R_200 = compute_R_delta(model, M_halos, Z, delta=delta)
-    return angular_size(model, R_200, Z)
+def get_angular_size_from_comoving(model, radius, z, delta=200):
 
+    d_prop = radius / (1 + z)  
+    return angular_size(model, d_prop, z)
+    
 
 def load_interpolator(path=JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
@@ -263,6 +258,7 @@ def paint_y(
     halo_theta: np.ndarray,
     halo_phi: np.ndarray,
     M_halos: np.ndarray,
+    halo_radius: np.ndarray, 
     particle_counts: np.ndarray,
     interpolator: BattagliaLogInterpolator,
     z: float = Z,
@@ -282,7 +278,8 @@ def paint_y(
         t1 = _log(f"build_tree (npix={npix}, pix_xyz={pix_xyz.nbytes/1e6:.1f}MB)", t1)
 
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
-    theta_200 = compute_theta_200(MODEL, M_halos, Z=z, delta=200)
+    theta_200 = get_angular_size_from_comoving(MODEL, halo_radius, z, delta=200)
+
 
     if verbose: t1 = time.perf_counter()
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
@@ -378,7 +375,7 @@ def paint_y_chunked(
             halo_theta[start_idx:end_idx], halo_phi[start_idx:end_idx]
         )
         M_chunk = M_halos[start_idx:end_idx]
-        theta_200_chunk = compute_theta_200(MODEL, M_chunk, Z=z, delta=200)
+        theta_200_chunk = get_angular_size_from_comoving(MODEL, halo_radius[start_idx:end_idx], z)
 
         if verbose: tq = time.perf_counter()
         (
@@ -452,6 +449,7 @@ def paint_y_wrapper(
     halo_theta: np.ndarray,
     halo_phi: np.ndarray,
     M_halos: np.ndarray,
+    halo_radius: np.ndarray,              # NEW
     particle_counts: np.ndarray,
     interpolator: BattagliaLogInterpolator,
     z: float = Z,
@@ -461,20 +459,18 @@ def paint_y_wrapper(
     use_weights: bool = True,
     verbose: bool = False,
 ):
-    """
-    Paint y-map wrapper
-    """
     if method == "chunked":
         y_map = paint_y_chunked(
-            halo_theta, halo_phi, M_halos, particle_counts,
+            halo_theta, halo_phi, M_halos, halo_radius, particle_counts,
             interpolator, z, nside, chunk_size, use_weights, verbose
         )
         return y_map, None, M_halos
 
     return paint_y(
-        halo_theta, halo_phi, M_halos, particle_counts,
+        halo_theta, halo_phi, M_halos, halo_radius, particle_counts,
         interpolator, z, nside, use_weights, verbose
     )
+
 
 def plot_zoom(y_map, nside, halo_theta=None, halo_phi=None, outpng="y_map_zoom.png"):
     """Zoom to brightest pixel."""
@@ -618,28 +614,30 @@ def paint_abacus(
     """
     Paint the y-compton map using Abacus halo catalogs and heal-counts.
     """
-    halo_theta, halo_phi, M_halos, particle_counts, redshift = load_abacus_for_painting(
-        halo_dir=halo_dir,
-        healcounts_file_1=healcounts_file_1,
-        healcounts_file_2=healcounts_file_2,
-        healcounts_file_3=healcounts_file_3,
-        nside=nside,
+    halo_theta, halo_phi, M_halos, halo_radius, particle_counts, redshift = load_abacus_for_painting(
+    halo_dir=halo_dir,
+    healcounts_file_1=healcounts_file_1,
+    healcounts_file_2=healcounts_file_2,
+    healcounts_file_3=healcounts_file_3,
+    nside=nside,
     )
 
     interpolator = load_interpolator(interpolator_path)
 
     print(f"Painting y-map ...")
     y_map, Y_per_halo, M_halos_out = paint_y_wrapper(
-        halo_theta=halo_theta,
-        halo_phi=halo_phi,
-        M_halos=M_halos,
-        particle_counts=particle_counts,
-        interpolator=interpolator,
-        z=redshift,
-        nside=nside,
-        method=method,
-        use_weights=use_weights,
+    halo_theta=halo_theta,
+    halo_phi=halo_phi,
+    M_halos=M_halos,
+    halo_radius=halo_radius,
+    particle_counts=particle_counts,
+    interpolator=interpolator,
+    z=redshift,
+    nside=nside,
+    method=method,
+    use_weights=use_weights,
     )
+
 
     print(f"\nMap statistics:")
     print(f"  Min: {y_map.min():.3e}")
@@ -662,10 +660,10 @@ def paint_abacus(
 
 def main():
     halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-    healcounts_file1 = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
-    healcounts_file2 = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
-    healcounts_file3 = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0665-0670.asdf"
-    output_file = "y_map_abacus.fits"
+    healcounts_file1 = HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
+    healcounts_file2 = HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0677-0682.asdf"
+    healcounts_file3 = HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0665-0670.asdf"
+    output_file = "y_map_abacus_total.fits"
 
     print(f"Painting Abacus tSZ map...")
     print(f"Halo directory: {halo_dir}")
@@ -714,8 +712,8 @@ def main():
 
     hp.mollview(y_map, title="tSZ y-map on real data (z = 0.542)", unit="y", norm="log", min=1e-12, nest=True)
     hp.graticule()
-    plt.savefig("y_map_abacus_real.png", dpi=200, bbox_inches="tight")
-    print("Saved visualization to y_map_abacus_real.png")
+    plt.savefig("y_map_abacus_real_total.png", dpi=200, bbox_inches="tight")
+    print("Saved visualization to y_map_abacus_real_total.png")
 
 
 if __name__ == "__main__":
