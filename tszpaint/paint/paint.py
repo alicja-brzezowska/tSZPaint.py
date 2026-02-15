@@ -9,6 +9,7 @@ from tszpaint.config import (
 )
 from tszpaint.converters import convert_rad_to_cart
 from tszpaint.cosmology.model import get_angular_size_from_comoving
+from tszpaint.decorators import trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.tree import build_tree, query_tree
@@ -29,6 +30,7 @@ def load_interpolator(path: Path = JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
 
 
+@trace_calls
 def paint_y(
     config: PainterConfig,
     halo_theta: np.ndarray,
@@ -168,7 +170,7 @@ def paint_and_visualize(
         hp.write_map(output_file, y_map, overwrite=True, nest=True)
         logger.info(f"Saved to {output_file}")
 
-        vis = Visualizer(data, y_map, y_per_halo, config.nside, None)
-        vis.plot_ra_dec()
-        vis.plot_Y_vs_M()
-        vis.visualize_y_map()
+    vis = Visualizer(data, y_map, y_per_halo, config.nside, output_file)
+    vis.plot_ra_dec()
+    vis.plot_Y_vs_M()
+    vis.visualize_y_map()
