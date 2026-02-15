@@ -14,14 +14,26 @@ class Visualizer:
     y_map: np.ndarray
     y_per_halo: np.ndarray
     nside: int
+    output_file_stub: str | None = None
     scale: float = 6.0
+    output_png_dpi: int = 250
 
     @property
     def resolution(self) -> float:
         pix_arcmin: float = hp.nside2resol(self.nside, arcmin=True)
         return pix_arcmin / self.scale
 
-    def plot_zoom(self, outpng: str = "y_map_zoom.png"):
+    def finalize_plot(self, suffix: str):
+        plt.tight_layout()
+        if stub := self.output_file_stub:
+            outpath = f"{stub}_{suffix}.png"
+            plt.savefig(outpath, dpi=self.output_png_dpi, bbox_inches="tight")
+            logger.info(f"Saved: {outpath}")
+        else:
+            plt.show()
+        plt.close()
+
+    def plot_zoom(self):
         """Zoom to brightest pixel."""
         ipix = int(np.nanargmax(self.y_map))
         theta, phi = hp.pix2ang(self.nside, ipix, nest=True)
@@ -57,11 +69,9 @@ class Visualizer:
             label="Halo centers",
         )
         plt.legend()
-        plt.savefig(outpng, dpi=250, bbox_inches="tight")
-        plt.close()
-        print(f"Saved: {outpng}")
+        self.finalize_plot("y_zoom")
 
-    def plot_ra_dec(self, outpng: str = "y_map_zoom_radec.png"):
+    def plot_ra_dec(self):
         """Zoom to specific RA/Dec."""
         ra_deg = 140.609
         dec_deg = -0.047
@@ -94,9 +104,7 @@ class Visualizer:
             label="Halo centers",
         )
         plt.legend()
-        plt.savefig(outpng, dpi=250, bbox_inches="tight")
-        plt.close()
-        print(f"Saved: {outpng}")
+        self.finalize_plot("ra_dec")
 
     def plot_Y_vs_M(
         self,
@@ -167,14 +175,11 @@ class Visualizer:
         ax.set_title("Integrated Compton-$y$ vs Halo Mass")
         ax.grid(alpha=0.3)
         ax.legend()
-        plt.tight_layout()
-        plt.savefig(outpng, dpi=200, bbox_inches="tight")
-        plt.close()
-        print(f"Saved: {outpng}")
+        self.finalize_plot("y_vs_m")
         print(f"  Slope = {slope:.3f} +/- {slope_err:.3f}")
         print(f"  Intercept = {intercept:.3f}")
 
-    def visualize_y_map(self, outpath: str):
+    def visualize_y_map(self):
         hp.mollview(
             self.y_map,
             title="tSZ y-map on real data (z = 0.542)",
@@ -184,6 +189,4 @@ class Visualizer:
             nest=True,
         )
         hp.graticule()
-        plt.savefig(outpath, dpi=200, bbox_inches="tight")
-        logger.info(f"Saved visualization to {outpath}")
-        plt.close()
+        self.finalize_plot("y_map")
