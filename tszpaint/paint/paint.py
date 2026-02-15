@@ -5,8 +5,6 @@ import numpy as np
 from loguru import logger
 
 from tszpaint.config import (
-    HALO_CATALOGS_PATH,
-    HEALCOUNTS_PATH,
     INTERPOLATORS_PATH,
 )
 from tszpaint.converters import convert_rad_to_cart
@@ -20,12 +18,6 @@ from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile.y_profile import (
     create_battaglia_profile,
 )
-
-# HEALPix
-NSIDE = 8192
-Z = 0.5  # FOR MOCK DATA
-N = 2  # Multiple of theta_200 to search
-N_BINS = 20  # NOTE: THINK how many bins!
 
 MODEL = create_battaglia_profile()
 PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
@@ -45,8 +37,8 @@ def paint_y(
     particle_counts: np.ndarray,
     interpolator: BattagliaLogInterpolator,
     radius: np.ndarray,
-    z: float = Z,
-    nside: int = NSIDE,
+    z: float,
+    nside: int,
     use_weights: bool = True,
 ):
     logger.info(f"Starting vectorized paint: {len(M_halos)} halos, nside={nside}")
@@ -132,8 +124,8 @@ def paint_abacus(
     healcounts_file_1: Path,
     healcounts_file_2: Path,
     healcounts_file_3: Path,
-    output_file: str = "y_map_abacus.fits",
-    nside: int = NSIDE,
+    output_file: str,
+    nside: int,
     interpolator_path: Path = JAX_PATH,
     use_weights: bool = True,
 ):
@@ -173,39 +165,3 @@ def paint_abacus(
         vis.plot_Y_vs_M(output_file.replace(".fits", "_y_vs_m.png"))
 
     return y_map
-
-
-def main():
-    halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-    healcounts_file1 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
-    )
-    healcounts_file2 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
-    )
-    healcounts_file3 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0665-0670.asdf"
-    )
-    output_file = "y_map_abacus.fits"
-
-    logger.info("Painting Abacus tSZ map...")
-    logger.info(f"Halo directory: {halo_dir}")
-    logger.info(f"Healcounts file 1: {healcounts_file1}")
-    logger.info(f"Healcounts file 2: {healcounts_file2}")
-    logger.info(f"Healcounts file 3: {healcounts_file3}")
-    logger.info(f"Output file: {output_file}")
-    config = PainterConfig(NSIDE, N, N_BINS)
-
-    paint_abacus(
-        config,
-        halo_dir=halo_dir,
-        healcounts_file_1=healcounts_file1,
-        healcounts_file_2=healcounts_file2,
-        healcounts_file_3=healcounts_file3,
-        output_file=output_file,
-        nside=NSIDE,
-    )
-
-
-if __name__ == "__main__":
-    main()
