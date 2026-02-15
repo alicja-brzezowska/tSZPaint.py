@@ -20,6 +20,7 @@ dependencies = [
     "scipy-stubs>=1.17.0.2",
     "unxt>=1.7.7",
     "wcosmo>=0.5.4",
+    "wrapt>=2.1.1",
 ]
 
 [dependency-groups]
