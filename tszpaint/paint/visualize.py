@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -10,14 +11,40 @@ from tszpaint.paint.abacus_loader import SimulationData
 
 
 @dataclass
+class PlotConfig:
+    """Configuration for different plot modes."""
+
+    mode: Literal["standard", "healpix"]
+    log_offset: float
+    title_prefix: str
+    unit: str
+
+    @classmethod
+    def standard(cls):
+        return cls("standard", 10**-20, "Painting output", "log10(y)")
+
+    @classmethod
+    def healpix(cls):
+        return cls("healpix", 1, "Healpix output", "log10(counts+1)")
+
+
+@dataclass
 class Visualizer:
-    data: SimulationData
-    y_map: np.ndarray
-    y_per_halo: np.ndarray
+    """Visualization tools for HEALPix maps"""
+
     nside: int
     output_file_stub: str | None = None
     scale: float = 6.0
     output_png_dpi: int = 250
+
+    @staticmethod
+    def validate_config_and_sim_data(
+        config: PlotConfig, sim_data: SimulationData | None
+    ):
+        if config.mode == "standard" and sim_data is None:
+            raise ValueError(
+                "Can't plot with `standard` PlotConfig without passing simulation data for halo centers"
+            )
 
     @property
     def resolution(self) -> float:
@@ -34,149 +61,101 @@ class Visualizer:
             plt.show()
         plt.close()
 
+    def _plot_gnomview(
+        self,
+        y_map: np.ndarray,
+        rot: tuple[float, float],
+        config: PlotConfig,
+        suffix: str,
+        sim_data: SimulationData | None = None,
+        xsize: int = 4000,
+    ):
+        """Core gnomonic projection plotting logic."""
+        plt.figure(figsize=(10, 10))
+
+        map_data = np.log10(y_map + config.log_offset)
+        title = f"{config.title_prefix} (RA={rot[0]:.3f} Dec={rot[1]:.3f})"
+
+        hp.gnomview(
+            map_data,
+            rot=list(rot),
+            xsize=xsize,
+            reso=self.resolution,
+            nest=True,
+            title=title,
+            unit=config.unit,
+            hold=True,
+        )
+        hp.graticule()
+
+        if sim_data is not None:
+            halo_lon = np.degrees(sim_data.phi)
+            halo_lat = 90.0 - np.degrees(sim_data.theta)
+            hp.projscatter(
+                halo_lon,
+                halo_lat,
+                lonlat=True,
+                marker="x",
+                color="red",
+                s=20,
+                alpha=0.7,
+                label="Halo centers",
+            )
+
+        plt.legend()
+        self.finalize_plot(suffix)
+
     @time_calls
-    def plot_zoom(self):
-        """Zoom to brightest pixel."""
-        ipix = int(np.nanargmax(self.y_map))
+    def plot_zoom(
+        self,
+        y_map: np.ndarray,
+        config: PlotConfig,
+        sim_data: SimulationData | None = None,
+    ):
+        """Zoom to brightest pixel in the map."""
+        self.validate_config_and_sim_data(config, sim_data)
+
+        ipix = int(np.nanargmax(y_map))
         theta, phi = hp.pix2ang(self.nside, ipix, nest=True)
         lon = np.degrees(phi)
         lat = 90.0 - np.degrees(theta)
 
-        xsize = 4000
-
-        plt.figure(figsize=(10, 10))
-        hp.gnomview(
-            np.log10(self.y_map + 10**-20),
-            rot=[lon, lat],
-            xsize=xsize,
-            reso=self.resolution,
-            nest=True,
-            title=f"Zoomed (nside={self.nside})",
-            unit="log10(y)",
-            hold=True,
-        )
-        hp.graticule()
-
-        # Plot halo centers to check consistency with healpix pixels;
-        halo_lon = np.degrees(self.data.phi)
-        halo_lat = 90.0 - np.degrees(self.data.theta)
-        hp.projscatter(
-            halo_lon,
-            halo_lat,
-            lonlat=True,
-            marker="x",
-            color="red",
-            s=20,
-            alpha=0.7,
-            label="Halo centers",
-        )
-        plt.legend()
-        self.finalize_plot("y_zoom")
-
+        suffix = "healpix_zoom" if config == PlotConfig.healpix() else "y_zoom"
+        self._plot_gnomview(y_map, (lon, lat), config, suffix, sim_data)
 
     @time_calls
-    def plot_zoom_healpix(self):
-        """Zoom to brightest pixel, for healpix maps only."""
-        ipix = int(np.nanargmax(self.y_map))
-        theta, phi = hp.pix2ang(self.nside, ipix, nest=True)
-        lon = np.degrees(phi)
-        lat = 90.0 - np.degrees(theta)
+    def plot_ra_dec(
+        self,
+        y_map: np.ndarray,
+        config: PlotConfig,
+        ra_deg: float = 140.609,
+        dec_deg: float = -0.047,
+        sim_data: SimulationData | None = None,
+    ):
+        """Zoom to specific RA/Dec coordinates."""
+        self.validate_config_and_sim_data(config, sim_data)
 
-        xsize = 4000
-
-        plt.figure(figsize=(10, 10))
-        hp.gnomview(
-            np.log10(self.y_map + 1),
-            rot=[lon, lat],
-            xsize=xsize,
-            reso=self.resolution,
-            nest=True,
-            title=f"Healpix output (nside={self.nside})",
-            unit="log10(counts+1)",
-            hold=True,
+        suffix = (
+            "healpix_ra_dec_zoom" if config == PlotConfig.healpix() else "y_ra_dec_zoom"
         )
-        hp.graticule()
-        plt.legend()
-        self.finalize_plot("healpix_zoom")
-
-    
-
-    @time_calls
-    def plot_ra_dec(self):
-        """Zoom to specific RA/Dec."""
-        ra_deg = 140.609
-        dec_deg = -0.047
-
-        xsize = 4000
-
-        plt.figure(figsize=(10, 10))
-        hp.gnomview(
-            np.log10(self.y_map + 10**-20),
-            rot=[ra_deg, dec_deg],
-            xsize=xsize,
-            reso=self.resolution,
-            nest=True,
-            title=f"Painting output (RA={ra_deg:.3f} Dec={dec_deg:.3f})",
-            unit="log10(y)",
-            hold=True,
-        )
-        hp.graticule()
-
-        halo_lon = np.degrees(self.data.phi)
-        halo_lat = 90.0 - np.degrees(self.data.theta)
-        hp.projscatter(
-            halo_lon,
-            halo_lat,
-            lonlat=True,
-            marker="x",
-            color="red",
-            s=20,
-            alpha=0.7,
-            label="Halo centers",
-        )
-        plt.legend()
-        self.finalize_plot("y_ra_dec_zoom")
-
-
-    @time_calls
-    def plot_ra_dec_healpix(self):
-        """Zoom to specific RA/Dec; for healpix maps only."""
-        ra_deg = 140.609
-        dec_deg = -0.047
-
-        xsize = 4000
-
-        plt.figure(figsize=(10, 10))
-        hp.gnomview(
-            np.log10(self.y_map + 1),
-            rot=[ra_deg, dec_deg],
-            xsize=xsize,
-            reso=self.resolution,
-            nest=True,
-            title=f"Healpix output (RA={ra_deg:.3f} Dec={dec_deg:.3f})",
-            unit="log10(counts + 1)",
-            hold=True,
-        )
-        hp.graticule()
-        plt.legend()
-        self.finalize_plot("healpix_ra_dec_zoom")
-
-
+        self._plot_gnomview(y_map, (ra_deg, dec_deg), config, suffix, sim_data)
 
     @time_calls
     def plot_Y_vs_M(
         self,
+        sim_data: SimulationData,
+        y_per_halo: np.ndarray,
         nbins_plot: int = 80,
     ):
         """Binned log-log plot of integrated Y vs halo mass with weighted linear fit."""
         mask = (
-            (self.data.m_halos > 0)
-            & (self.y_per_halo > 0)
-            & np.isfinite(self.data.m_halos)
-            & np.isfinite(self.y_per_halo)
+            (sim_data.m_halos > 0)
+            & (y_per_halo > 0)
+            & np.isfinite(sim_data.m_halos)
+            & np.isfinite(y_per_halo)
         )
-        logM = np.log10(self.data.m_halos[mask])
-        logY = np.log10(self.y_per_halo[mask])
+        logM = np.log10(sim_data.m_halos[mask])
+        logY = np.log10(y_per_halo[mask])
 
         bins = np.linspace(logM.min(), logM.max(), nbins_plot + 1)
         centers = 0.5 * (bins[:-1] + bins[1:])
@@ -195,8 +174,6 @@ class Visualizer:
 
         good = np.isfinite(y_mean) & np.isfinite(y_err) & (y_err > 0)
 
-        # Weighted linear fit: logY = intercept + slope * logM
-        # np.polyfit w = 1/sigma for WLS (it squares internally)
         coeffs, cov = np.polyfit(
             centers[good],
             y_mean[good],
@@ -237,10 +214,11 @@ class Visualizer:
         print(f"  Intercept = {intercept:.3f}")
 
     @time_calls
-    def visualize_y_map(self):
+    def visualize_y_map(self, y_map: np.ndarray):
+        """Full-sky Mollweide projection of the y-map."""
         hp.mollview(
-            self.y_map,
-            title="tSZ y-map (z = 0.542)",
+            y_map,
+            title="tSZ y-map",
             unit="y",
             norm="log",
             min=1e-12,

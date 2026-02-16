@@ -13,7 +13,7 @@ from tszpaint.logging import trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.tree import build_tree, query_tree
-from tszpaint.paint.visualize import Visualizer
+from tszpaint.paint.visualize import PlotConfig, Visualizer
 from tszpaint.paint.weights import compute_weights
 from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile.y_profile import (
@@ -170,7 +170,7 @@ def paint_and_visualize(
         hp.write_map(output_file, y_map, overwrite=True, nest=True)
         logger.info(f"Saved to {output_file}")
 
-    vis = Visualizer(data, y_map, y_per_halo, config.nside, output_file)
-    vis.plot_ra_dec()
-    vis.plot_Y_vs_M()
-    vis.visualize_y_map()
+    vis = Visualizer(config.nside, output_file)
+    vis.plot_ra_dec(y_map, PlotConfig.standard(), sim_data=data)
+    vis.plot_Y_vs_M(data, y_per_halo)
+    vis.visualize_y_map(y_map)
