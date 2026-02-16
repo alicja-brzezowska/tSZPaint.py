@@ -15,7 +15,7 @@ from tszpaint.converters import convert_rad_to_cart
 from tszpaint.cosmology.model import get_angular_size_from_comoving
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.mock_data_generator import MockDataGenerator
-from tszpaint.paint.pixel_search import find_pixels_in_halos_parallel
+from tszpaint.paint.pixel_search import find_pixels_in_halos
 from tszpaint.paint.tree import build_tree, query_tree
 from tszpaint.y_profile.y_profile import (
     create_battaglia_profile,
@@ -86,7 +86,7 @@ def run_healpy_benchmark(
     # No build time - directly query
     start = time.time()
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
-        find_pixels_in_halos_parallel(
+        find_pixels_in_halos(
             nside, halo_xyz, search_radii, nest=True, n_workers=n_workers
         )
     )

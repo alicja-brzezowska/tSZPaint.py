@@ -12,7 +12,7 @@ from tszpaint.cosmology.model import get_angular_size_from_comoving
 from tszpaint.logging import trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
-from tszpaint.paint.tree import build_tree, query_tree
+from tszpaint.paint.pixel_search import find_pixels_in_halos
 from tszpaint.paint.visualize import PlotConfig, Visualizer
 from tszpaint.paint.weights import compute_weights
 from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
@@ -48,19 +48,10 @@ def paint_y(
         f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
     )
 
-    # Build and query tree
-    tree, pix_xyz, pix_indices = build_tree(config)
-    npix = len(pix_indices)
-
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
     theta_200 = get_angular_size_from_comoving(MODEL, radius, z)
-
-    pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
-        config=config,
-        halo_xyz=halo_xyz,
-        theta_200=theta_200,
-        particle_tree=tree,
-        particle_xyz=pix_xyz,
+    pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
+        find_pixels_in_halos(nside, halo_xyz, theta_200)
     )
 
     if use_weights:
@@ -87,7 +78,7 @@ def paint_y(
 
     y_values_with_weight = y_values * weights
 
-    y_map = np.zeros(npix, dtype=float)
+    y_map = np.zeros(hp.nside2npix(nside), dtype=float)
     np.add.at(y_map, pix_in_halos, y_values_with_weight)
 
     y_per_halo = np.bincount(
