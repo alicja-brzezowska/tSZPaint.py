@@ -59,7 +59,6 @@ class MockDataGenerator:
     def generate_simulation_data(self):
         theta, phi, m_halos, radii = self.create_mock_halo_catalogs()
         particle_counts = self.generate_mock_particle_counts()
-        halo_pixels = hp.ang2pix(self.nside, theta, phi, nest=True)
         return SimulationData(
-            theta, phi, m_halos, particle_counts, self.redshift, halo_pixels, radii
+            theta, phi, m_halos, particle_counts, self.redshift, radii
         )

@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import asdf
-import healpy as hp
 import numpy as np
 
 from tszpaint.converters import convert_comoving_to_sky
@@ -15,7 +14,6 @@ class SimulationData:
     m_halos: np.ndarray
     particle_counts: np.ndarray
     redshift: float
-    halo_pixels: np.ndarray
     radii_halos: np.ndarray
 
 
@@ -84,8 +82,5 @@ def load_abacus_for_painting(
     particle_counts = load_multiple_healcounts(
         healcounts_file_1, healcounts_file_2, healcounts_file_3
     )
-    halo_pixels = hp.ang2pix(nside, theta, phi, nest=True)
 
-    return SimulationData(
-        theta, phi, m_halos, particle_counts, redshift, halo_pixels, radius
-    )
+    return SimulationData(theta, phi, m_halos, particle_counts, redshift, radius)
