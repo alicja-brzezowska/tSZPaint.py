@@ -13,10 +13,14 @@ import numpy as np
 from tszpaint.converters import convert_rad_to_cart
 
 # Import your implementations
+from tszpaint.cosmology.model import get_angular_size_from_comoving
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.mock_data_generator import MockDataGenerator
 from tszpaint.paint.pixel_search import find_pixels_in_halos_parallel
 from tszpaint.paint.tree import build_tree, query_tree
+from tszpaint.y_profile.y_profile import (
+    create_battaglia_profile,
+)
 
 
 @dataclass
@@ -144,9 +148,9 @@ def run_benchmark_suite():
 
     configs = [
         # (nside, n_halos, description)
-        (512, 1000, "Small: 512 nside, 1k halos"),
-        # (1024, 5000, "Medium: 1024 nside, 5k halos"),
-        # (2048, 10000, "Large: 2048 nside, 10k halos"),
+        (512, 1000, "Small: 512 nside, 100 halos"),
+        (1024, 5000, "Medium: 1024 nside, 5k halos"),
+        (2048, 10000, "Large: 2048 nside, 10k halos"),
         # (2048, 50000, "XLarge: 2048 nside, 50k halos"),
     ]
 
@@ -164,10 +168,14 @@ def run_benchmark_suite():
 
         # Convert to cartesian
         halo_xyz = convert_rad_to_cart(sim_data.theta, sim_data.phi)
-        theta_200 = sim_data.radii_halos
+
+        theta_200 = get_angular_size_from_comoving(
+            create_battaglia_profile(), sim_data.radii_halos, 0.5
+        )
+        # theta_200 = sim_data.radii_halos
 
         # Create config
-        search_radius_multiplier = 3.0
+        search_radius_multiplier = 2.0
         search_radii = search_radius_multiplier * theta_200
 
         config = PainterConfig(
