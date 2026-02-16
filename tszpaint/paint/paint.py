@@ -9,7 +9,7 @@ from tszpaint.config import (
 )
 from tszpaint.converters import convert_rad_to_cart
 from tszpaint.cosmology.model import get_angular_size_from_comoving
-from tszpaint.decorators import trace_calls
+from tszpaint.logging import trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.tree import build_tree, query_tree

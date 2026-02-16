@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 from loguru import logger
 
-from tszpaint.decorators import time_calls
+from tszpaint.logging import time_calls
 
 DEBUG = True
 USE_JAX = True

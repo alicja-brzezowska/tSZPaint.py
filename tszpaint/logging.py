@@ -43,3 +43,16 @@ def trace_calls(
     result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
     logger.trace(f"← {wrapped.__qualname__}")
     return result
+
+
+@contextmanager
+def timer(label: str):
+    """Used to measure runtime of specific code snippets.
+    Usage:
+        with timer("some operation"):
+            print("performing some operation...")
+    """
+    start = perf_counter()
+    yield
+    elapsed = perf_counter() - start
+    logger.debug(f"{label} took {elapsed:.6f}s")

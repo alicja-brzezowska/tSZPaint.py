@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import healpy as hp
 import numpy as np
 
-from tszpaint.decorators import trace_calls
+from tszpaint.logging import trace_calls
 from tszpaint.paint.abacus_loader import SimulationData
 from tszpaint.y_profile.y_profile import compute_R_delta, create_battaglia_profile
 

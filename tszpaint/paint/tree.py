@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from tszpaint.converters import convert_cart_to_rad, convert_rad_to_cart
-from tszpaint.decorators import time_calls, trace_calls
+from tszpaint.logging import time_calls, timer, trace_calls
 from tszpaint.paint.config import PainterConfig
 
 
@@ -26,11 +26,13 @@ def build_tree(config: PainterConfig):
     Build a 3D KDTree of HEALPix pixels.
     Need to convert to cartesian coordinates; as no angular KDTree in scipy.
     """
-    npix = hp.nside2npix(config.nside)
-    pix_indices = np.arange(npix)
-    theta, phi = hp.pix2ang(config.nside, pix_indices, nest=True)
-    pix_xyz = convert_rad_to_cart(theta, phi)
-    tree = cKDTree(pix_xyz)
+    with timer("Preparing cKDTree input"):
+        npix = hp.nside2npix(config.nside)
+        pix_indices = np.arange(npix)
+        theta, phi = hp.pix2ang(config.nside, pix_indices, nest=True)
+        pix_xyz = convert_rad_to_cart(theta, phi)
+    with timer("Calling CKDTree constructor"):
+        tree = cKDTree(pix_xyz)
     return tree, pix_xyz, pix_indices  # NOTE: do i need pix_xyz?
 
 

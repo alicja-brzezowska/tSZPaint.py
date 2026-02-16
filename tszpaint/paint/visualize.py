@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
 
-from tszpaint.decorators import time_calls
+from tszpaint.logging import time_calls
 from tszpaint.paint.abacus_loader import SimulationData
 
 

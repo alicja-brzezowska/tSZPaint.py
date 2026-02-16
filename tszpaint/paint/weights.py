@@ -1,7 +1,7 @@
 import numpy as np
 from numba import prange
 
-from tszpaint.decorators import time_calls, trace_calls
+from tszpaint.logging import time_calls, trace_calls
 from tszpaint.paint.config import PainterConfig
 
 
