@@ -31,6 +31,19 @@ wheels = [
 ]
 
 [[package]]
+name = "asdf-compression"
+version = "0.1.1.dev3+gf0254fc6d"
+source = { git = "https://github.com/asdf-format/asdf-compression#f0254fc6d5806ce5f2e1f95c48f14f54239dc5f3" }
+dependencies = [
+    { name = "asdf" },
+]
+
+[package.optional-dependencies]
+blsc = [
+    { name = "blosc" },
+]
+
+[[package]]
 name = "asdf-standard"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -114,6 +127,30 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a6/09/9003e5662691056e0e8b2e6f57c799e71875fac0be0e785d8cb11557cd2a/beartype-0.22.5.tar.gz", hash = "sha256:516a9096cc77103c96153474fa35c3ebcd9d36bd2ec8d0e3a43307ced0fa6341", size = 1586256, upload-time = "2025-11-01T05:49:20.771Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/f6/073d19f7b571c08327fbba3f8e011578da67ab62a11f98911274ff80653f/beartype-0.22.5-py3-none-any.whl", hash = "sha256:d9743dd7cd6d193696eaa1e025f8a70fb09761c154675679ff236e61952dfba0", size = 1321700, upload-time = "2025-11-01T05:49:18.436Z" },
+]
+
+[[package]]
+name = "blosc"
+version = "1.11.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9e/66/3c0e1801d4674582c38f9b009e71c09eb501fc3db591e35436dac15fa7a7/blosc-1.11.4.tar.gz", hash = "sha256:e0b312d9554d3aea93c75af4ad70dfa8b815ef4fe2b658c313b2f27ed0f41d37", size = 1439535, upload-time = "2026-01-17T23:02:25.209Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/2d/4297f8307d4c5a074b94ddf5c07f9aa00349eed5aa8ab953de071d7edb97/blosc-1.11.4-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:4b0881f8f20aa59dd00eda2e3ea42cd31a3101800b011c4779468642255a900c", size = 2218691, upload-time = "2026-01-17T23:01:53.552Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/94/cd0c27fb125e596fa9f60b0a4a13e5fafe6adda91a20795478a359ed47ed/blosc-1.11.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:4a3017e4ba7ca74bdc13a7d16345650e5dd92df818829dc2f0f966d5961ea96d", size = 1802814, upload-time = "2026-01-17T23:01:54.586Z" },
+    { url = "https://files.pythonhosted.org/packages/83/89/16b2eed4ed85d4a3da58055aa268cdc209f06a024bd8333dcc9f0ae39425/blosc-1.11.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5c918f50e5d049fb0d4f88c1eac84ecabebb1a1031771270f9d9faf1dfd34b1e", size = 2637867, upload-time = "2026-01-17T23:01:56.116Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/12/a2d3bf7f378956e34570bcbdc739a85e1fb2933750fc8cb25859ccf3245d/blosc-1.11.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7db609398f3d1518ab7ce4f7f950d2985acce90207a4687064935b01ef0c50f1", size = 2728862, upload-time = "2026-01-17T23:01:57.304Z" },
+    { url = "https://files.pythonhosted.org/packages/95/2c/e1b663b3cc0ac397fc0b2ce30ae0584512ecab57d3e66c1d5d91840751ba/blosc-1.11.4-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:384037a3d0d33e0ad7d043ca61d37e02750033aab09ebc466fc5e3d587851063", size = 2678146, upload-time = "2026-01-17T23:01:58.367Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/84/f4cddcb2b01485dc030e7d6dc47d8e12574cb0413ae8757f10063ce43adf/blosc-1.11.4-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:f0c36200925a99087f04ccfc7d325be7778faeb19612c02107affc1005c6f460", size = 2752706, upload-time = "2026-01-17T23:02:00.145Z" },
+    { url = "https://files.pythonhosted.org/packages/05/54/d9eae824523d1791d47292fa9b62f5ac11b48d4c63c6e204fc451643281b/blosc-1.11.4-cp313-cp313-win32.whl", hash = "sha256:262f988a32c9b83bd6dcb9acd0a6776bed8ca9a8de91c36e992b8f8392cf13a3", size = 1529671, upload-time = "2026-01-17T23:02:01.348Z" },
+    { url = "https://files.pythonhosted.org/packages/66/1f/4801194833711031ad8e295a3c2d278d9cf10d68b264fef529928dc5b0a2/blosc-1.11.4-cp313-cp313-win_amd64.whl", hash = "sha256:8a55116dd306012a54b85b70e89fab6af56b297200782edea445349d9b8750e9", size = 1812802, upload-time = "2026-01-17T23:02:03.13Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/99/aa1f29eb8ab79b23bc70c1b580d321a86126b5a6c7e9084469c867fc22a0/blosc-1.11.4-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:56981311ace2f469bfc2adfa02ca876f4d6edd87d21daf88f3e15d0cb14a6cd7", size = 2219446, upload-time = "2026-01-17T23:02:04.46Z" },
+    { url = "https://files.pythonhosted.org/packages/00/94/373c8284a0be8584fd42ca1226dca0c2e08e55dc647c9e14731620349d75/blosc-1.11.4-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:6b014c791d9941b34fd97c0ae01051f261ade5665020cca5228645f141d5dcbe", size = 1802830, upload-time = "2026-01-17T23:02:05.463Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/84/e41fa3c3d53f5c90e3d157bd77029d8b5ca59b9eda4559d6ddd0005c8a29/blosc-1.11.4-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:00b14a21714c4b171281ce75c8502868cf1baf4675dfb215a0d460cd7b656f75", size = 2637860, upload-time = "2026-01-17T23:02:06.57Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/56/6523bc2eff64389e40bad67c6bb892f188d70fcc5e0893b34f523a3b3061/blosc-1.11.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ed7c0c3fa48c912ddf17b15fcadbe596d09dfe65271d9cf9a1687efa01f67d03", size = 2728860, upload-time = "2026-01-17T23:02:08.353Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/0d/5744ef198a1983fedc0f0b83eb0f487bb695fd2f4acc15fed666e494f62f/blosc-1.11.4-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:679bc66e8b3c3c0749f2e4cae62a511a5635224b28ba93ca8b4bba81cc981e5b", size = 2678188, upload-time = "2026-01-17T23:02:10.09Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/b7/435668cfc4b742b3cad5147feab44f7d5da93b084c618f74537338481b86/blosc-1.11.4-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:63a2729f803a0b9cb11b053f009beacd3e8100ca9e4925bca155a29b4c216d89", size = 2752726, upload-time = "2026-01-17T23:02:11.334Z" },
+    { url = "https://files.pythonhosted.org/packages/23/3c/292579b92e286e6a6e3fafce7d5fb78e0da5b12f00dd1de3d69c428fdce8/blosc-1.11.4-cp314-cp314-win32.whl", hash = "sha256:8ab5343077f54a9c69b0098eb4b83640d55a058dcbca33541db831d01b2043a6", size = 1563656, upload-time = "2026-01-17T23:02:12.472Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/21/987ad65253305c8ecc8ba470b58a6f99b4920984b8f25126f65d5f4be7d4/blosc-1.11.4-cp314-cp314-win_amd64.whl", hash = "sha256:569143fee09943789a5f1c64ea265e5baa74e874ae26b632df69f3558f56ec48", size = 1854363, upload-time = "2026-01-17T23:02:13.625Z" },
 ]
 
 [[package]]
@@ -1258,6 +1295,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "asdf" },
+    { name = "asdf-compression", extra = ["blsc"] },
     { name = "astropy" },
     { name = "cosmo" },
     { name = "h5py" },
@@ -1283,6 +1321,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asdf", specifier = ">=5.1.0" },
+    { name = "asdf-compression", extras = ["blsc"], git = "https://github.com/asdf-format/asdf-compression" },
     { name = "astropy", specifier = ">=7.1.1" },
     { name = "cosmo", specifier = ">=0.7.0" },
     { name = "h5py", specifier = ">=3.15.1" },
