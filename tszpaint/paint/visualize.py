@@ -73,6 +73,34 @@ class Visualizer:
         plt.legend()
         self.finalize_plot("y_zoom")
 
+
+    @time_calls
+    def plot_zoom_healpix(self):
+        """Zoom to brightest pixel, for healpix maps only."""
+        ipix = int(np.nanargmax(self.y_map))
+        theta, phi = hp.pix2ang(self.nside, ipix, nest=True)
+        lon = np.degrees(phi)
+        lat = 90.0 - np.degrees(theta)
+
+        xsize = 4000
+
+        plt.figure(figsize=(10, 10))
+        hp.gnomview(
+            np.log10(self.y_map + 1),
+            rot=[lon, lat],
+            xsize=xsize,
+            reso=self.resolution,
+            nest=True,
+            title=f"Healpix output (nside={self.nside})",
+            unit="log10(counts+1)",
+            hold=True,
+        )
+        hp.graticule()
+        plt.legend()
+        self.finalize_plot("healpix_zoom")
+
+    
+
     @time_calls
     def plot_ra_dec(self):
         """Zoom to specific RA/Dec."""
@@ -88,7 +116,7 @@ class Visualizer:
             xsize=xsize,
             reso=self.resolution,
             nest=True,
-            title=f"Painting output; merged 3 files (RA={ra_deg:.3f} Dec={dec_deg:.3f})",
+            title=f"Painting output (RA={ra_deg:.3f} Dec={dec_deg:.3f})",
             unit="log10(y)",
             hold=True,
         )
@@ -107,7 +135,33 @@ class Visualizer:
             label="Halo centers",
         )
         plt.legend()
-        self.finalize_plot("ra_dec")
+        self.finalize_plot("y_ra_dec_zoom")
+
+
+    @time_calls
+    def plot_ra_dec_healpix(self):
+        """Zoom to specific RA/Dec; for healpix maps only."""
+        ra_deg = 140.609
+        dec_deg = -0.047
+
+        xsize = 4000
+
+        plt.figure(figsize=(10, 10))
+        hp.gnomview(
+            np.log10(self.y_map + 1),
+            rot=[ra_deg, dec_deg],
+            xsize=xsize,
+            reso=self.resolution,
+            nest=True,
+            title=f"Healpix output (RA={ra_deg:.3f} Dec={dec_deg:.3f})",
+            unit="log10(counts + 1)",
+            hold=True,
+        )
+        hp.graticule()
+        plt.legend()
+        self.finalize_plot("healpix_ra_dec_zoom")
+
+
 
     @time_calls
     def plot_Y_vs_M(

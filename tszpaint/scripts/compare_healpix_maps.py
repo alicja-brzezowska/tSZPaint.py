@@ -2,11 +2,21 @@ import asdf
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-from tszpaint.config import ABACUS_DATA_PATH, HALO_CATALOGS_PATH, HEALCOUNTS_PATH, HEALCOUNTS_TOTAL_PATH
-from tszpaint.abacus_loader import load_abacus_healcounts
+from tszpaint.config import HEALCOUNTS_PATH, HEALCOUNTS_TOTAL_PATH
+from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
+from tszpaint.paint.config import PainterConfig
+from tszpaint.paint.visualize import Visualizer
 
-total_file = HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
-halo_file = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
+
+TOTAL_PATH = HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
+HALO_PATH = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
+
+
+
+def visualize_healpix_maps():
+
+
+
 
 
 def plot_zoom(y_map, nside, outpng="y_map_zoom.png"):
@@ -66,8 +76,8 @@ def plot_ra_dec(y_map, nside, outpng="y_map_zoom_radec.png"):
 
 
 def main():
-    halo_counts = load_abacus_healcounts(halo_file)
-    total_counts = load_abacus_healcounts(total_file)
+    halo_counts = load_abacus_for_painting(HALO_PATH)
+    total_counts = load_abacus_for_painting(TOTAL_PATH)
 
     nside = hp.npix2nside(len(halo_counts))
 

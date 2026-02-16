@@ -1,7 +1,46 @@
+
+from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
+
+
+# inspect healcounts maps:
+# - go to headers: find the list of n+1 steps
+# get the redshift per step 
+# get the redshift edges 
+
+
+
+
+
+
+
+
+
+
+
+
 import numpy as np
 import asdf
 from pathlib import Path
 import sys
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH

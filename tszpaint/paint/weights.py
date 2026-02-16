@@ -1,3 +1,4 @@
+from unittest import result
 import numpy as np
 from numba import prange
 
@@ -14,10 +15,6 @@ def weights_mechanism(
     init_weights: np.ndarray,  # weights based on particle counts
 ):
     """compute normalized weights for each particle contribution within halos."""
-
-    EMPTY_FRACTION_THRESHOLD = (
-        2.0 / 3.0
-    )  # fall back to isotropic if >2/3 of bin is empty
 
     N_halos = len(theta_200)
     weights = np.ones_like(distances, dtype=np.float64)
@@ -54,26 +51,13 @@ def weights_mechanism(
         normalization_per_bin = np.ones(config.n_bins, dtype=np.float64)
         for b in range(config.n_bins):
             if bin_pixel_tot[b] > 0.0:
-                empty_frac = 1.0 - bin_nonempty[b] / bin_pixel_tot[b]
-                if empty_frac > EMPTY_FRACTION_THRESHOLD:
-                    # Too sparse: use uniform weights (isotropic profile)
-                    normalization_per_bin[b] = 1.0
-                elif bin_weight_tot[b] > 0.0:
-                    normalization_per_bin[b] = bin_pixel_tot[b] / bin_weight_tot[b]
+                normalization_per_bin[b] = bin_pixel_tot[b] / bin_weight_tot[b]
 
         # Apply: for sparse bins, w*1.0 still uses init_weights, so override to uniform
         result = np.ones(count, dtype=np.float64)
         for i in range(count):
             b = bin_ids[i]
-            empty_frac = (
-                1.0 - bin_nonempty[b] / bin_pixel_tot[b]
-                if bin_pixel_tot[b] > 0.0
-                else 1.0
-            )
-            if empty_frac > EMPTY_FRACTION_THRESHOLD:
-                result[i] = 1.0  # uniform weight → isotropic profile
-            else:
-                result[i] = w[i] * normalization_per_bin[b]
+            result[i] = w[i] * normalization_per_bin[b]
 
         weights[start : start + count] = result
 

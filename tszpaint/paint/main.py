@@ -42,7 +42,6 @@ def main():
         logger.info(f"Healcounts file 2: {healcounts_file2}")
         logger.info(f"Healcounts file 3: {healcounts_file3}")
         logger.info(f"Output file: {output_file}")
-        config = PainterConfig(NSIDE, N, N_BINS)
 
         paint_abacus(
             config,
