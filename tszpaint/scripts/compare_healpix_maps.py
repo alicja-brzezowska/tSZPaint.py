@@ -17,11 +17,11 @@ def main():
         filename_suffix="total",
     )
 
-    #visualizer.plot_ra_dec(
-    #    y_map=load_abacus_healcounts(HALO_PATH),
-    #    config=config,
-    #    filename_suffix="halos",
-    #)
+    visualizer.plot_ra_dec(
+        y_map=load_abacus_healcounts(TOTAL_PATH),
+        config=config,
+        filename_suffix="halos",
+    )
 
 
 if __name__ == "__main__":
