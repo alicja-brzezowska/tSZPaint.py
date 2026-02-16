@@ -1,6 +1,5 @@
 
 import asdf
-
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 
 
@@ -28,17 +27,26 @@ def inspect_file(filepath, name):
                 elif key == "halo_lightcone" and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 if key == "data" and isinstance(data, dict):
-                    tsi = data["halo_timeslice_index"]
-                    print("type:", type(tsi))
-                    print("shape:", tsi.shape, "dtype:", tsi.dtype)
+                    if "halo_timeslice_index" in data:
+                        tsi = data["halo_timeslice_index"]
+                        print("type:", type(tsi))
+                        print("shape:", tsi.shape, "dtype:", tsi.dtype)
 
-                    print("first 20:", tsi[:20])
-                    print("min/max (may read full array):", tsi.min(), tsi.max())
+                        print("first 20:", tsi[:20])
+                        print("min/max (may read full array):", tsi.min(), tsi.max())
+                    else:
+                        print(f"  {key}: dict with keys: {list(data.keys())}")
 
                 if key == "halo_timeslice" and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 if key == "header_post" and isinstance(data, dict):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
+                if key == "headers" and isinstance(data, list):
+                    print(f"  {key}: list with {len(data)} items")
+                    #for i, item in enumerate(data):
+                    #    print(f"\n    --- headers[{i}] ---")
+                    #    print(item)
+
 
     except Exception:
         with open(filepath, "r") as f:

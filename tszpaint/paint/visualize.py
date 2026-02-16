@@ -131,13 +131,15 @@ class Visualizer:
         ra_deg: float = 140.609,
         dec_deg: float = -0.047,
         sim_data: SimulationData | None = None,
+        filename_suffix: str = "",
     ):
         """Zoom to specific RA/Dec coordinates."""
         self.validate_config_and_sim_data(config, sim_data)
 
         suffix = (
-            "healpix_ra_dec_zoom" if config == PlotConfig.healpix() else "y_ra_dec_zoom"
+            f"healpix_ra_dec_zoom_{filename_suffix}" if config == PlotConfig.healpix() else f"y_ra_dec_zoom_{filename_suffix}"
         )
+
         self._plot_gnomview(y_map, (ra_deg, dec_deg), config, suffix, sim_data)
 
     @time_calls

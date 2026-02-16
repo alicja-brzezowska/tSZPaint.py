@@ -28,6 +28,7 @@ def load_abacus_halos(
         d = af["halo_lightcone"]
         positions = np.asarray(d["Interpolated_x_L2com"])
         num_particles = np.asarray(d["Interpolated_N"])
+        comoving_distance = np.asarray(d["Interpolated_L2com"])
         halo_timeslice_index = np.asarray(d["halo_timeslice_index"])
 
         m_halos = num_particles.astype(np.float64) * particle_mass
