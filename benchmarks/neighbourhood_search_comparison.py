@@ -4,7 +4,6 @@ Benchmark script comparing KD-tree vs HEALPix native methods for halo painting.
 
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -151,7 +150,7 @@ def run_benchmark_suite():
         (512, 1000, "Small: 512 nside, 100 halos"),
         (1024, 5000, "Medium: 1024 nside, 5k halos"),
         (2048, 10000, "Large: 2048 nside, 10k halos"),
-        # (2048, 50000, "XLarge: 2048 nside, 50k halos"),
+        (2048, 50000, "XLarge: 2048 nside, 50k halos"),
     ]
 
     all_results = []
@@ -215,8 +214,8 @@ def run_benchmark_suite():
     return all_results
 
 
-def plot_results(results):
-    """Create visualization of benchmark results."""
+def plot_benchmark_comparison(results, output_path="benchmark_comparison.png"):
+    """Create a single comprehensive comparison plot."""
     import pandas as pd
 
     # Convert to DataFrame
@@ -234,103 +233,169 @@ def plot_results(results):
         ]
     )
 
-    # Create figure with subplots
+    # Create figure with 2x2 subplots
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("KD-Tree vs HEALPix Benchmark Results", fontsize=16, fontweight="bold")
+    fig.suptitle(
+        "KD-Tree vs HEALPix Benchmark Comparison", fontsize=16, fontweight="bold"
+    )
 
-    # Group by configuration
-    configs = df.groupby(["nside", "n_halos"]).groups
-
-    # Plot 1: Total time comparison
+    # ========================================================================
+    # Plot 1: Total time by configuration (grouped bar chart)
+    # ========================================================================
     ax = axes[0, 0]
-    for (nside, n_halos), indices in configs.items():
-        config_df = df.loc[indices]
-        x_pos = list(range(len(config_df)))
-        ax.bar(
-            x_pos, config_df["total_time"], label=f"nside={nside}, n_halos={n_halos}"
+
+    # Get unique configurations
+    unique_configs = df[["nside", "n_halos"]].drop_duplicates()
+    config_labels = [
+        f"nside={row.nside}\n{row.n_halos}k halos"
+        for _, row in unique_configs.iterrows()
+    ]
+
+    methods = df["method"].unique()
+    x = np.arange(len(unique_configs))
+    width = 0.8 / len(methods)
+
+    for i, method in enumerate(methods):
+        times = []
+        for _, config_row in unique_configs.iterrows():
+            time_val = df[
+                (df["nside"] == config_row.nside)
+                & (df["n_halos"] == config_row.n_halos)
+                & (df["method"] == method)
+            ]["total_time"]
+            times.append(time_val.iloc[0] if not time_val.empty else 0)
+
+        ax.bar(x + i * width, times, width, label=method, alpha=0.8)
+
+    ax.set_xlabel("Configuration", fontweight="bold")
+    ax.set_ylabel("Total Time (seconds)", fontweight="bold")
+    ax.set_title("Total Time by Configuration")
+    ax.set_xticks(x + width * (len(methods) - 1) / 2)
+    ax.set_xticklabels(config_labels, fontsize=9)
+    ax.legend(fontsize=8, loc="upper left")
+    ax.grid(True, alpha=0.3, axis="y")
+
+    # ========================================================================
+    # Plot 2: Speedup relative to KD-Tree
+    # ========================================================================
+    ax = axes[0, 1]
+
+    for _, config_row in unique_configs.iterrows():
+        config_df = df[
+            (df["nside"] == config_row.nside) & (df["n_halos"] == config_row.n_halos)
+        ]
+
+        kdtree_time = config_df[config_df["method"] == "KD-Tree"]["total_time"]
+        if kdtree_time.empty:
+            continue
+
+        kdtree_time = kdtree_time.iloc[0]
+
+        # Calculate speedups for HEALPix methods
+        healpy_methods = config_df[config_df["method"] != "KD-Tree"]
+        if healpy_methods.empty:
+            continue
+
+        speedups = kdtree_time / healpy_methods["total_time"]
+        labels = [
+            m.split("-")[-1] for m in healpy_methods["method"]
+        ]  # Extract worker count
+
+        config_label = f"nside={config_row.nside}, {config_row.n_halos}k halos"
+        ax.plot(
+            labels,
+            speedups.values,
+            marker="o",
+            linewidth=2,
+            markersize=8,
+            label=config_label,
         )
-        ax.set_xticks(x_pos)
-        ax.set_xticklabels(config_df["method"], rotation=45, ha="right")
-    ax.set_ylabel("Time (seconds)")
-    ax.set_title("Total Time per Configuration")
+
+    ax.axhline(
+        y=1.0,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label="KD-Tree baseline",
+        alpha=0.7,
+    )
+    ax.set_xlabel("Number of Workers", fontweight="bold")
+    ax.set_ylabel("Speedup (×)", fontweight="bold")
+    ax.set_title("Speedup vs KD-Tree (Higher = Better)")
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
 
-    # Plot 2: Build vs Query time (KD-tree only)
-    ax = axes[0, 1]
-    kdtree_df = df[df["method"] == "KD-Tree"]
+    # ========================================================================
+    # Plot 3: Build vs Query time breakdown (KD-Tree only)
+    # ========================================================================
+    ax = axes[1, 0]
+
+    kdtree_df = df[df["method"] == "KD-Tree"].copy()
     if not kdtree_df.empty:
-        x = range(len(kdtree_df))
-        width = 0.35
+        kdtree_df["config"] = kdtree_df.apply(
+            lambda row: f"{row['nside']}/{row['n_halos']}k", axis=1
+        )
+
+        x = np.arange(len(kdtree_df))
+        width = 0.6
+
         ax.bar(
-            [i - width / 2 for i in x],
+            x,
             kdtree_df["build_time"],
             width,
-            label="Build",
+            label="Build Tree",
             alpha=0.8,
+            color="steelblue",
         )
         ax.bar(
-            [i + width / 2 for i in x],
+            x,
             kdtree_df["query_time"],
             width,
+            bottom=kdtree_df["build_time"],
             label="Query",
             alpha=0.8,
+            color="coral",
         )
+
+        ax.set_xlabel("Configuration (nside/n_halos)", fontweight="bold")
+        ax.set_ylabel("Time (seconds)", fontweight="bold")
+        ax.set_title("KD-Tree Time Breakdown")
         ax.set_xticks(x)
-        ax.set_xticklabels(
-            [f"{r.nside}/{r.n_halos}" for _, r in kdtree_df.iterrows()],
-            rotation=45,
-            ha="right",
-        )
-        ax.set_ylabel("Time (seconds)")
-        ax.set_title("KD-Tree: Build vs Query Time")
+        ax.set_xticklabels(kdtree_df["config"], rotation=0)
         ax.legend()
-        ax.grid(True, alpha=0.3)
+        ax.grid(True, alpha=0.3, axis="y")
 
-    # Plot 3: Speedup over KD-tree
-    ax = axes[1, 0]
-    for (nside, n_halos), indices in configs.items():
-        config_df = df.loc[indices]
-        kdtree_time = config_df[config_df["method"] == "KD-Tree"]["total_time"]
-        if not kdtree_time.empty:
-            kdtree_time = kdtree_time.iloc[0]
-            speedups = kdtree_time / config_df["total_time"]
-            x_pos = list(range(len(config_df)))
-            ax.plot(
-                x_pos, speedups, marker="o", label=f"nside={nside}, n_halos={n_halos}"
-            )
-            ax.set_xticks(x_pos)
-            ax.set_xticklabels(config_df["method"], rotation=45, ha="right")
-    ax.axhline(y=1.0, color="r", linestyle="--", label="KD-Tree baseline")
-    ax.set_ylabel("Speedup (×)")
-    ax.set_title("Speedup Relative to KD-Tree")
-    ax.legend(fontsize=8)
-    ax.grid(True, alpha=0.3)
-
+    # ========================================================================
     # Plot 4: Scaling with problem size
+    # ========================================================================
     ax = axes[1, 1]
-    for method in df["method"].unique():
+
+    for method in methods:
         method_df = df[df["method"] == method].sort_values("n_halos")
         if not method_df.empty:
             ax.plot(
                 method_df["n_halos"],
                 method_df["total_time"],
                 marker="o",
-                label=method,
                 linewidth=2,
+                markersize=8,
+                label=method,
             )
-    ax.set_xlabel("Number of Halos")
-    ax.set_ylabel("Time (seconds)")
+
+    ax.set_xlabel("Number of Halos", fontweight="bold")
+    ax.set_ylabel("Total Time (seconds)", fontweight="bold")
     ax.set_title("Scaling with Problem Size")
-    ax.legend()
+    ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    plt.tight_layout()
+    ax.legend(fontsize=8)
 
-    # Save figure
-    output_path = Path("benchmark_results.png")
+    # ========================================================================
+    # Adjust layout and save
+    # ========================================================================
+    plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"\nPlot saved to: {output_path}")
 
@@ -391,10 +456,7 @@ if __name__ == "__main__":
     print_summary_table(results)
 
     # Create plots
-    try:
-        plot_results(results)
-    except Exception as e:
-        print(f"Plotting failed: {e}")
+    plot_benchmark_comparison(results)
 
     print("\n" + "=" * 70)
     print("BENCHMARK COMPLETE")
