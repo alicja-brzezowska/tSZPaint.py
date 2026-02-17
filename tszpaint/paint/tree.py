@@ -1,12 +1,15 @@
 import healpy as hp
 import numpy as np
+from loguru import logger
 from scipy.spatial import cKDTree
+from numba import jit
 
 from tszpaint.converters import convert_cart_to_rad, convert_rad_to_cart
-from tszpaint.logging import time_calls, timer, trace_calls
+from tszpaint.logging import time_calls, timer, trace_calls, memory_usage, array_size
 from tszpaint.paint.config import PainterConfig
 
 
+@jit(nopython=True, parallel=True)
 def angular_separation(
     theta1: np.ndarray, phi1: np.ndarray, theta2: np.ndarray, phi2: np.ndarray
 ):
@@ -19,6 +22,8 @@ def angular_separation(
     return 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
 
+@memory_usage
+@array_size
 @time_calls
 @trace_calls
 def build_tree(config: PainterConfig):
@@ -36,6 +41,8 @@ def build_tree(config: PainterConfig):
     return tree, pix_xyz, pix_indices  # NOTE: do i need pix_xyz?
 
 
+@memory_usage
+@array_size
 @time_calls
 @trace_calls
 def query_tree(
@@ -56,6 +63,13 @@ def query_tree(
     pix_in_halos = particle_tree.query_ball_point(x=halo_xyz, r=search_radii)
     # list of arrays; each array contains pixel indices for that halo (in HealPix map)
 
+    if getattr(config, "log_level", 0) >= 2:
+        halo_counts_preview = np.array([len(p) for p in pix_in_halos], dtype=np.int64)
+        logger.info(
+            f"query_tree: halos={N_halos}, avg_pixels_per_halo={halo_counts_preview.mean():.2f}, "
+            f"max_pixels_per_halo={halo_counts_preview.max()}"
+        )
+
     # define and return halo_starts and halo_counts for efficient weighting
     halo_counts = np.array([len(p) for p in pix_in_halos], dtype=np.int64)
     halo_starts = np.zeros(N_halos, dtype=np.int64)
@@ -67,8 +81,20 @@ def query_tree(
         [np.asarray(p, dtype=np.int64) for p in pix_in_halos]
     )  # flatten the array of arrays
 
+    if getattr(config, "log_level", 0) >= 2:
+        logger.info(
+            f"query_tree: pix_in_halos size={pix_in_halos.nbytes / 1e6:.1f}MB "
+            f"(len={len(pix_in_halos):,})"
+        )
+
     # create a halo index array mapping each pixel to its halo:
     halo_indices = np.repeat(np.arange(N_halos, dtype=np.int64), halo_counts)
+
+    if getattr(config, "log_level", 0) >= 2:
+        logger.info(
+            f"query_tree: halo_indices size={halo_indices.nbytes / 1e6:.1f}MB "
+            f"(len={len(halo_indices):,})"
+        )
 
     # exclude pixels not in any halo:
     particle_xyz = particle_xyz[pix_in_halos]
@@ -81,5 +107,11 @@ def query_tree(
     pix_theta, pix_phi = convert_cart_to_rad(particle_xyz)
     halo_theta, halo_phi = convert_cart_to_rad(halo_xyz)
     distances = angular_separation(halo_theta, halo_phi, pix_theta, pix_phi)
+
+    if getattr(config, "log_level", 0) >= 2:
+        logger.info(
+            f"query_tree: distances size={distances.nbytes / 1e6:.1f}MB "
+            f"(len={len(distances):,})"
+        )
 
     return pix_in_halos, distances, halo_starts, halo_counts, halo_indices

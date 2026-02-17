@@ -1,0 +1,89 @@
+Loading rhel8/default-ccl
+  Loading requirement: ucx/1.15.0 rhel8/global rhel8/slurm
+    rhel8/cclake-env/2024-06-01 rhel8/cclake/base glibc/2.28/gcc/4d2cj5pu
+    gcc-runtime/13.3.0/gcc/2sn7kkm3 zlib-ng/2.1.6/gcc/mkjcey6m
+    zstd/1.5.6/gcc/l5c7mfsx binutils/2.42/gcc/y33xj6rq
+    intel-oneapi-compilers/2023.2.4/gcc/4lbvg4hv
+    intel-oneapi-mpi/2021.12.1/intel/hlruk24n rhel8/cclake/intel
+2026-02-17 16:34:11.511 | INFO     | __main__:main:39 - Painting Abacus tSZ map...
+2026-02-17 16:34:11.511 | INFO     | __main__:main:40 - Halo directory: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_halos/z0.542/lightcone_halo_info_000.asdf
+2026-02-17 16:34:11.511 | INFO     | __main__:main:41 - Healcounts file 1: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/halo/heal-counts/LightCone0_halo_heal-counts_Step0671-0676.asdf
+2026-02-17 16:34:11.511 | INFO     | __main__:main:44 - Output file: y_map_abacus.fits
+2026-02-17 16:34:34.033 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:45 - Log thetas array contains 512 elements, smallest: -25.4, largest: 11.5
+2026-02-17 16:34:34.033 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:48 - Redshifts array contains 256 elements, smallest: 0.001, largest: 5.0
+2026-02-17 16:34:34.033 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:51 - Log masses array contains 256 elements, smallest: 11.0, largest: 15.7
+2026-02-17 16:34:34.066 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:54 - Largest value in prof-y: 0.020307759665103186, smallest: 5.698375820087387e-84
+2026-02-17 16:34:34.189 | TRACE    | tszpaint.logging:trace_calls:44 - → paint_y(PainterConfig(nside=4096, search_radius=0.5, n_bins=20), array([0.49095547, 0.49194622, ..., 2.5940595 , 2.5942936 ],
+      shape=(246471,), dtype=float32), array([3.8537688, 5.573064 , ..., 3.9499903, 5.4742365],
+      shape=(246471,), dtype=float32), array([1.65616837e+13, 1.65616837e+13, ..., 1.39692806e+13,
+       1.39692806e+13], shape=(246471,)), array([0, 0, ..., 0, 0], shape=(201326592,), dtype=uint32), BattagliaLogInterpolator(interpolator=<jax._src.third_party.scipy.interpolate.RegularGridInterpolator object at 0x14a974adc980>, use_jax=True), array([38.00856215, 38.00856215, ..., 37.6852672 , 37.6852672 ],
+      shape=(246471,)), 0.541613797989815, 4096, True){}
+2026-02-17 16:34:34.189 | INFO     | tszpaint.paint.paint:paint_y:51 - CPU threads: SLURM_CPUS_PER_TASK=8, OMP_NUM_THREADS=8, NUMBA_NUM_THREADS=8, MKL_NUM_THREADS=8, OPENBLAS_NUM_THREADS=8, NUMEXPR_NUM_THREADS=8
+2026-02-17 16:34:34.207 | INFO     | tszpaint.paint.paint:paint_y:63 - Numba threads in use: 8
+2026-02-17 16:34:34.207 | INFO     | tszpaint.paint.paint:paint_y:66 - Starting vectorized paint: 246471 halos, nside=4096
+2026-02-17 16:34:34.208 | INFO     | tszpaint.paint.paint:paint_y:67 -   particle_counts: 805.3MB, dtype=uint32
+2026-02-17 16:34:34.212 | TRACE    | tszpaint.logging:trace_calls:44 - → find_pixels_in_halos(4096, array([[-0.35687426, -0.3080966 ,  0.8818828 ],
+       [ 0.35816896, -0.3079321 ,  0.88141525],
+       ...,
+       [-0.35954466, -0.37647572, -0.85381126],
+       [ 0.35919905, -0.37652916, -0.85393316]],
+      shape=(246471, 3), dtype=float32), array([0.01822971, 0.01822971, ..., 0.01807468, 0.01807468],
+      shape=(246471,))){'n_workers': 8}
+2026-02-17 16:36:32.746 | DEBUG    | tszpaint.logging:timer:60 - Parallel queries (8 workers) took 118.533831s
+2026-02-17 16:37:02.117 | DEBUG    | tszpaint.logging:timer:60 - Flattening parallel results took 29.371018s
+2026-02-17 16:37:02.505 | TRACE    | tszpaint.logging:trace_calls:46 - ← find_pixels_in_halos
+2026-02-17 16:37:02.505 | DEBUG    | tszpaint.logging:time_calls:32 - find_pixels_in_halos took 148.292911s
+2026-02-17 16:37:02.505 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] find_pixels_in_halos[0]: 31676.4MB (dtype=int64, shape=(3959544320,))
+2026-02-17 16:37:02.505 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] find_pixels_in_halos[1]: 31676.4MB (dtype=float64, shape=(3959544320,))
+2026-02-17 16:37:02.505 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] find_pixels_in_halos[2]: 2.0MB (dtype=int64, shape=(246471,))
+2026-02-17 16:37:02.505 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] find_pixels_in_halos[3]: 2.0MB (dtype=int64, shape=(246471,))
+2026-02-17 16:37:02.505 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] find_pixels_in_halos[4]: 31676.4MB (dtype=int64, shape=(3959544320,))
+2026-02-17 16:37:02.505 | INFO     | tszpaint.logging:memory_usage:78 - [MEMORY] find_pixels_in_halos: 1455.0MB → 163645.3MB (Δ+162190.3MB)
+2026-02-17 16:37:02.515 | INFO     | tszpaint.paint.paint:paint_y:86 - theta_200 stats: min=9.735e-03, median=1.796e-02, max=2.087e-02
+2026-02-17 16:37:02.515 | INFO     | tszpaint.paint.paint:paint_y:87 - pixel-halo pairs: 3,959,544,320
+2026-02-17 16:37:02.515 | INFO     | tszpaint.paint.paint:paint_y:88 - distances bytes: 31.68 GB
+2026-02-17 16:37:02.515 | INFO     | tszpaint.paint.paint:paint_y:89 - weights expected bytes (float64): 31.68 GB
+2026-02-17 16:37:02.516 | TRACE    | tszpaint.logging:trace_calls:44 - → compute_weights(PainterConfig(nside=4096, search_radius=0.5, n_bins=20),){'pixel_indices': array([ 47082991,  47082999, ..., 187930764, 187930768],
+      shape=(3959544320,)), 'distances': array([0.01814065, 0.01819067, ..., 0.01799082, 0.01790203],
+      shape=(3959544320,)), 'halo_starts': array([         0,      16717, ..., 3959511448, 3959527873],
+      shape=(246471,)), 'halo_counts': array([16717, 16727, ..., 16425, 16447], shape=(246471,)), 'theta_200': array([0.01822971, 0.01822971, ..., 0.01807468, 0.01807468],
+      shape=(246471,)), 'particle_counts': array([0, 0, ..., 0, 0], shape=(201326592,), dtype=uint32)}
+2026-02-17 16:37:27.661 | TRACE    | tszpaint.logging:trace_calls:44 - → weights_mechanism(0.5, 20, array([0.01814065, 0.01819067, ..., 0.01799082, 0.01790203],
+      shape=(3959544320,)), array([         0,      16717, ..., 3959511448, 3959527873],
+      shape=(246471,)), array([16717, 16727, ..., 16425, 16447], shape=(246471,)), array([0.01822971, 0.01822971, ..., 0.01807468, 0.01807468],
+      shape=(246471,)), array([2.15443469e-17, 2.15443469e-17, ..., 2.15443469e-17,
+       2.15443469e-17], shape=(3959544320,))){}
+2026-02-17 16:37:49.298 | TRACE    | tszpaint.logging:trace_calls:46 - ← weights_mechanism
+2026-02-17 16:37:49.346 | DEBUG    | tszpaint.logging:time_calls:32 - weights_mechanism took 21.719042s
+2026-02-17 16:37:49.354 | INFO     | tszpaint.logging:array_size:94 - [ARRAY] weights_mechanism: 31676.4MB (dtype=float64, shape=(3959544320,))
+2026-02-17 16:37:49.354 | INFO     | tszpaint.logging:memory_usage:78 - [MEMORY] weights_mechanism: 187412.7MB → 212564.1MB (Δ+25151.4MB)
+2026-02-17 16:37:49.354 | TRACE    | tszpaint.logging:trace_calls:46 - ← compute_weights
+2026-02-17 16:37:49.355 | DEBUG    | tszpaint.logging:time_calls:32 - compute_weights took 46.839264s
+2026-02-17 16:37:49.355 | INFO     | tszpaint.logging:array_size:94 - [ARRAY] compute_weights: 31676.4MB (dtype=float64, shape=(3959544320,))
+2026-02-17 16:37:49.355 | INFO     | tszpaint.logging:memory_usage:78 - [MEMORY] compute_weights: 163645.3MB → 212565.9MB (Δ+48920.6MB)
+Command exited with non-zero status 137
+	Command being timed: "/home/ab2927/.local/bin/uv run -m tszpaint.paint.main"
+	User time (seconds): 628.47
+	System time (seconds): 90.97
+	Percent of CPU this job got: 293%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 4:05.20
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 209227812
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 9817
+	Minor (reclaiming a frame) page faults: 32245536
+	Voluntary context switches: 7679060
+	Involuntary context switches: 942
+	Swaps: 0
+	File system inputs: 3691392
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 137
+slurmstepd: error: Detected 1 oom_kill event in StepId=22932726.0. Some of the step tasks have been OOM Killed.
+srun: error: cpu-q-130: task 0: Out Of Memory

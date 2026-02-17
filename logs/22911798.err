@@ -1,0 +1,72 @@
+Loading rhel8/default-ccl
+  Loading requirement: ucx/1.15.0 rhel8/global rhel8/slurm
+    rhel8/cclake-env/2024-06-01 rhel8/cclake/base glibc/2.28/gcc/4d2cj5pu
+    gcc-runtime/13.3.0/gcc/2sn7kkm3 zlib-ng/2.1.6/gcc/mkjcey6m
+    zstd/1.5.6/gcc/l5c7mfsx binutils/2.42/gcc/y33xj6rq
+    intel-oneapi-compilers/2023.2.4/gcc/4lbvg4hv
+    intel-oneapi-mpi/2021.12.1/intel/hlruk24n rhel8/cclake/intel
+2026-02-17 15:48:25.766 | INFO     | __main__:main:39 - Painting Abacus tSZ map...
+2026-02-17 15:48:25.766 | INFO     | __main__:main:40 - Halo directory: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_halos/z0.542/lightcone_halo_info_000.asdf
+2026-02-17 15:48:25.767 | INFO     | __main__:main:41 - Healcounts file 1: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/halo/heal-counts/LightCone0_halo_heal-counts_Step0671-0676.asdf
+2026-02-17 15:48:25.767 | INFO     | __main__:main:44 - Output file: y_map_abacus.fits
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/main.py", line 57, in <module>
+    main()
+    ~~~~^^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/main.py", line 46, in main
+    paint_abacus(
+    ~~~~~~~~~~~~^
+        config,
+        ^^^^^^^
+    ...<4 lines>...
+        use_weights=USE_WEIGHTS,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/paint.py", line 167, in paint_abacus
+    data = load_abacus_for_painting(
+        halo_dir=halo_dir,
+        healcounts_file_1=healcounts_file_1,
+        nside=config.nside,
+    )
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/abacus_loader.py", line 135, in load_abacus_for_painting
+    particle_counts = degrade_healcounts(particle_counts, nside_out=nside)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/abacus_loader.py", line 50, in degrade_healcounts
+    degraded_counts = hp.ud_grade(particle_counts, nside_out=nside_out, order_in='NEST', order_out='NEST')
+  File "/home/ab2927/rds/tSZPaint.py/.venv/lib/python3.13/site-packages/healpy/pixelfunc.py", line 319, in wrapper
+    out = f(m, *args, **kwds)
+  File "/home/ab2927/rds/tSZPaint.py/.venv/lib/python3.13/site-packages/healpy/pixelfunc.py", line 1957, in ud_grade
+    check_nside(nside_out, nest=order_in != "RING")
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ab2927/rds/tSZPaint.py/.venv/lib/python3.13/site-packages/healpy/pixelfunc.py", line 1302, in check_nside
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: 8196 is not a valid nside parameter (must be a power of 2, less than 2**30)
+Command exited with non-zero status 1
+	Command being timed: "/home/ab2927/.local/bin/uv run -m tszpaint.paint.main"
+	User time (seconds): 10.53
+	System time (seconds): 1.80
+	Percent of CPU this job got: 55%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:22.24
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6699132
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2940
+	Minor (reclaiming a frame) page faults: 77374
+	Voluntary context switches: 18765
+	Involuntary context switches: 147
+	Swaps: 0
+	File system inputs: 2718520
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+srun: error: cpu-q-124: task 0: Exited with exit code 1

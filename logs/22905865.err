@@ -1,0 +1,153 @@
+Loading rhel8/default-ccl
+  Loading requirement: ucx/1.15.0 rhel8/global rhel8/slurm
+    rhel8/cclake-env/2024-06-01 rhel8/cclake/base glibc/2.28/gcc/4d2cj5pu
+    gcc-runtime/13.3.0/gcc/2sn7kkm3 zlib-ng/2.1.6/gcc/mkjcey6m
+    zstd/1.5.6/gcc/l5c7mfsx binutils/2.42/gcc/y33xj6rq
+    intel-oneapi-compilers/2023.2.4/gcc/4lbvg4hv
+    intel-oneapi-mpi/2021.12.1/intel/hlruk24n rhel8/cclake/intel
+2026-02-17 15:15:56.232 | INFO     | __main__:main:39 - Painting Abacus tSZ map...
+2026-02-17 15:15:56.232 | INFO     | __main__:main:40 - Halo directory: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_halos/z0.542/lightcone_halo_info_000.asdf
+2026-02-17 15:15:56.232 | INFO     | __main__:main:41 - Healcounts file 1: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/halo/heal-counts/LightCone0_halo_heal-counts_Step0671-0676.asdf
+2026-02-17 15:15:56.232 | INFO     | __main__:main:44 - Output file: y_map_abacus.fits
+2026-02-17 15:16:12.095 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:45 - Log thetas array contains 512 elements, smallest: -25.4, largest: 11.5
+2026-02-17 15:16:12.096 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:48 - Redshifts array contains 256 elements, smallest: 0.001, largest: 5.0
+2026-02-17 15:16:12.096 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:51 - Log masses array contains 256 elements, smallest: 11.0, largest: 15.7
+2026-02-17 15:16:12.128 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:54 - Largest value in prof-y: 0.020307759665103186, smallest: 5.698375820087387e-84
+2026-02-17 15:16:12.246 | INFO     | tszpaint.paint.paint:paint_y:51 - CPU threads: SLURM_CPUS_PER_TASK=8, OMP_NUM_THREADS=8, NUMBA_NUM_THREADS=8, MKL_NUM_THREADS=8, OPENBLAS_NUM_THREADS=8, NUMEXPR_NUM_THREADS=8
+2026-02-17 15:16:12.264 | INFO     | tszpaint.paint.paint:paint_y:63 - Numba threads in use: 8
+2026-02-17 15:16:12.264 | INFO     | tszpaint.paint.paint:paint_y:66 - Starting vectorized paint: 246471 halos, nside=2048
+2026-02-17 15:16:12.264 | INFO     | tszpaint.paint.paint:paint_y:67 -   particle_counts: 201.3MB, dtype=uint32
+2026-02-17 15:16:15.496 | DEBUG    | tszpaint.logging:timer:60 - Preparing cKDTree input took 3.231805s
+2026-02-17 15:16:31.393 | DEBUG    | tszpaint.logging:timer:60 - Calling CKDTree constructor took 15.896737s
+2026-02-17 15:16:31.395 | DEBUG    | tszpaint.logging:time_calls:32 - build_tree took 19.130523s
+2026-02-17 15:16:31.395 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] build_tree[1]: 1208.0MB (dtype=float64, shape=(50331648, 3))
+2026-02-17 15:16:31.395 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] build_tree[2]: 402.7MB (dtype=int64, shape=(50331648,))
+2026-02-17 15:16:31.395 | INFO     | tszpaint.logging:memory_usage:78 - [MEMORY] build_tree: 816.8MB → 3492.3MB (Δ+2675.5MB)
+2026-02-17 15:19:14.396 | DEBUG    | tszpaint.logging:time_calls:32 - query_tree took 162.997506s
+2026-02-17 15:19:14.396 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] query_tree[0]: 7919.1MB (dtype=int64, shape=(989884693,))
+2026-02-17 15:19:14.396 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] query_tree[1]: 7919.1MB (dtype=float64, shape=(989884693,))
+2026-02-17 15:19:14.396 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] query_tree[2]: 2.0MB (dtype=int64, shape=(246471,))
+2026-02-17 15:19:14.396 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] query_tree[3]: 2.0MB (dtype=int64, shape=(246471,))
+2026-02-17 15:19:14.396 | INFO     | tszpaint.logging:array_size:99 - [ARRAY] query_tree[4]: 7919.1MB (dtype=int64, shape=(989884693,))
+2026-02-17 15:19:14.396 | INFO     | tszpaint.logging:memory_usage:78 - [MEMORY] query_tree: 3492.3MB → 44861.9MB (Δ+41369.7MB)
+2026-02-17 15:19:14.403 | INFO     | tszpaint.paint.paint:paint_y:86 - theta_200 stats: min=9.735e-03, median=1.796e-02, max=2.087e-02
+2026-02-17 15:19:14.403 | INFO     | tszpaint.paint.paint:paint_y:87 - pixel-halo pairs: 989,884,693
+2026-02-17 15:19:14.403 | INFO     | tszpaint.paint.paint:paint_y:88 - distances bytes: 7.92 GB
+2026-02-17 15:19:14.403 | INFO     | tszpaint.paint.paint:paint_y:89 - weights expected bytes (float64): 7.92 GB
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/main.py", line 57, in <module>
+    main()
+    ~~~~^^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/main.py", line 46, in main
+    paint_abacus(
+    ~~~~~~~~~~~~^
+        config,
+        ^^^^^^^
+    ...<4 lines>...
+        use_weights=USE_WEIGHTS,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/paint.py", line 172, in paint_abacus
+    paint_and_visualize(config, data, output_file, interpolator_path, use_weights)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/paint.py", line 183, in paint_and_visualize
+    y_map, y_per_halo = paint_y_wrapper(
+                        ~~~~~~~~~~~~~~~^
+        config,
+        ^^^^^^^
+    ...<2 lines>...
+        use_weights=use_weights,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/paint.py", line 134, in paint_y_wrapper
+    return paint_y(
+        config,
+    ...<8 lines>...
+        use_weights,
+    )
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 74, in memory_usage
+    result = wrapped(*args, **kwargs)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 90, in array_size
+    result = wrapped(*args, **kwargs)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 29, in time_calls
+    result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 45, in trace_calls
+    result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/paint.py", line 92, in paint_y
+    weights = compute_weights(
+        config,
+    ...<5 lines>...
+        particle_counts=particle_counts,
+    )
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 74, in memory_usage
+    result = wrapped(*args, **kwargs)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 90, in array_size
+    result = wrapped(*args, **kwargs)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 29, in time_calls
+    result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 45, in trace_calls
+    result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/weights.py", line 104, in compute_weights
+    weights = weights_mechanism(
+        config,
+    ...<4 lines>...
+        init_weights,
+    )
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 74, in memory_usage
+    result = wrapped(*args, **kwargs)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 90, in array_size
+    result = wrapped(*args, **kwargs)
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 29, in time_calls
+    result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/logging.py", line 45, in trace_calls
+    result = wrapped(*args, **kwargs)  # pyright: ignore[reportAny]
+  File "/home/ab2927/rds/tSZPaint.py/.venv/lib/python3.13/site-packages/numba/core/dispatcher.py", line 424, in _compile_for_args
+    error_rewrite(e, 'typing')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/ab2927/rds/tSZPaint.py/.venv/lib/python3.13/site-packages/numba/core/dispatcher.py", line 365, in error_rewrite
+    raise e.with_traceback(None)
+numba.core.errors.TypingError: Failed in nopython mode pipeline (step: nopython frontend)
+non-precise type pyobject
+During: typing of argument at /home/ab2927/rds/tSZPaint.py/tszpaint/paint/weights.py (20)
+
+File "tszpaint/paint/weights.py", line 20:
+def _fast_init_weights(particle_counts: np.ndarray, pixel_indices: np.ndarray) -> np.ndarray:
+    <source elided>
+
+@memory_usage
+^
+
+During: Pass nopython_type_inference 
+
+This error may have been caused by the following argument(s):
+- argument 0: Cannot determine Numba type of <class 'tszpaint.paint.config.PainterConfig'>
+
+Command exited with non-zero status 1
+	Command being timed: "/home/ab2927/.local/bin/uv run -m tszpaint.paint.main"
+	User time (seconds): 232.47
+	System time (seconds): 35.37
+	Percent of CPU this job got: 123%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:36.56
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 109545040
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 3481
+	Minor (reclaiming a frame) page faults: 14354045
+	Voluntary context switches: 21801
+	Involuntary context switches: 460
+	Swaps: 0
+	File system inputs: 3315008
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+srun: error: cpu-q-34: task 0: Exited with exit code 1

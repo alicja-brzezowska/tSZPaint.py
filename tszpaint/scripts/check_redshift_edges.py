@@ -2,6 +2,7 @@ from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 import asdf
 
 
+
 def obtain_healcount_edges(filepath):
     """Obtain the inner and outer edges (in comoving distance in Mpc/h) of the lightcone from a heal-counts file."""
     with asdf.open(filepath) as f:
@@ -21,6 +22,61 @@ def obtain_halo_edges(*filepaths):
 
     chis.sort()
     return 0.5 * (chis[0] + chis[1]), 0.5 * (chis[-1] + chis[-2])
+
+
+def obtain_halo_edges_multiple(*filepaths):
+    """Obtain the inner and outer edges (in comoving distance in Mpc/h) of the lightcone from halo catalog files.
+    
+    Can be called in two ways:
+    1. With multiple filepaths: obtain_halo_edges(file1, file2, file3)
+    2. With a single filepath: obtain_halo_edges(file_in_z_dir) - automatically finds adjacent redshift files
+    
+    Args:
+        *filepaths: Either 3 halo catalog files, or 1 file to auto-find adjacent redshifts
+        
+    Returns:
+        Tuple of (inner_edge, outer_edge) in comoving distance Mpc/h
+    """
+
+    if len(filepaths) == 1:
+        halo_file = Path(filepaths[0])
+        redshift_dir = halo_file.parent
+        lightcone_dir = redshift_dir.parent
+        
+        redshift_dirs = sorted([d for d in lightcone_dir.iterdir() if d.is_dir() and d.name.startswith('z')])
+        redshift_names = [d.name for d in redshift_dirs]
+        
+        current_z_name = redshift_dir.name
+        
+        current_idx = redshift_names.index(current_z_name)
+
+        if current_idx == 0:
+            lower_idx = 0
+            upper_idx = 1
+        elif current_idx == len(redshift_dirs) - 1:
+            lower_idx = len(redshift_dirs) - 2
+            upper_idx = len(redshift_dirs) - 1
+        else:
+            lower_idx = current_idx - 1
+            upper_idx = current_idx + 1
+        
+        filename = halo_file.name
+        
+        filepaths = (
+            redshift_dirs[lower_idx] / filename,
+            halo_file,
+            redshift_dirs[upper_idx] / filename,
+        )
+    
+    chis = []
+    for fp in filepaths:
+        with asdf.open(fp) as f:
+            chis.append(f.tree["header"]["CoordinateDistanceHMpc"])
+
+    chis.sort()
+    return 0.5 * (chis[0] + chis[1]), 0.5 * (chis[-1] + chis[-2])
+
+
 
 
 def main():

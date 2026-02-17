@@ -4,9 +4,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import healpy as hp
 import numpy as np
 
-from tszpaint.logging import time_calls, timer, trace_calls
+from tszpaint.logging import time_calls, timer, trace_calls, memory_usage, array_size
 
 
+@memory_usage
+@array_size
 @time_calls
 @trace_calls
 def find_pixels_in_halos(
@@ -23,7 +25,7 @@ def find_pixels_in_halos(
         halo_xyz: Halo positions as unit cartesian vectors, shape (N_halos, 3)
         search_radii: Search radius for each halo in radians, shape (N_halos,)
         nest: Use nested pixel ordering (recommended for spatial locality)
-
+        n_workers: Number of parallel workers to use (default: all available CPUs)
     Returns:
         pixel_indices: Flattened array of all pixel indices across all halos
         distances: Angular distance (radians) from each pixel to its halo center
