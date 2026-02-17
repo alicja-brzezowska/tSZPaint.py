@@ -28,7 +28,7 @@ def load_abacus_halos(
         d = af["halo_lightcone"]
         positions = np.asarray(d["Interpolated_x_L2com"])
         num_particles = np.asarray(d["Interpolated_N"])
-        comoving_distance = np.asarray(d["Interpolated_L2com"])
+        #comoving_distance = np.asarray(d["Interpolated_ComovingDist"])
         halo_timeslice_index = np.asarray(d["halo_timeslice_index"])
 
         m_halos = num_particles.astype(np.float64) * particle_mass
@@ -71,17 +71,13 @@ def load_multiple_healcounts(
 def load_abacus_for_painting(
     halo_dir: Path,
     healcounts_file_1: Path,
-    healcounts_file_2: Path,
-    healcounts_file_3: Path,
-    nside: int = 1024,
+    nside: int = 2048,
 ):
     pos, num_particles, particle_mass, redshift, radius = load_abacus_halos(halo_dir)
 
     theta, phi = convert_comoving_to_sky(pos)
 
     m_halos = num_particles.astype(np.float64) * particle_mass
-    particle_counts = load_multiple_healcounts(
-        healcounts_file_1, healcounts_file_2, healcounts_file_3
-    )
+    particle_counts = load_abacus_healcounts(healcounts_file_1)
 
     return SimulationData(theta, phi, m_halos, particle_counts, redshift, radius)

@@ -1,0 +1,15 @@
+JobID:      22835573
+NodeList:   cpu-q-595
+NTasks:     1
+CPUs/task:  8
+Time:       Mon Feb 16 19:31:40 GMT 2026
+Host:       cpu-q-595
+CWD:        /home/ab2927/rds/tSZPaint.py
+
+Nodes allocated:
+cpu-q-595
+
+Cpus_allowed_list for this shell:
+Cpus_allowed_list:	0-48,50,52,54,56,58,60,62
+
+Launching...

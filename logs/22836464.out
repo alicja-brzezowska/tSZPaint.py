@@ -1,0 +1,15 @@
+JobID:      22836464
+NodeList:   cpu-q-583
+NTasks:     1
+CPUs/task:  8
+Time:       Mon Feb 16 19:56:00 GMT 2026
+Host:       cpu-q-583
+CWD:        /home/ab2927/rds/tSZPaint.py
+
+Nodes allocated:
+cpu-q-583
+
+Cpus_allowed_list for this shell:
+Cpus_allowed_list:	0,2,4,6,8,10,12,14,16-63
+
+Launching...

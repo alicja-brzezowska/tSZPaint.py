@@ -1,0 +1,43 @@
+Loading rhel8/default-ccl
+  Loading requirement: ucx/1.15.0 rhel8/global rhel8/slurm
+    rhel8/cclake-env/2024-06-01 rhel8/cclake/base glibc/2.28/gcc/4d2cj5pu
+    gcc-runtime/13.3.0/gcc/2sn7kkm3 zlib-ng/2.1.6/gcc/mkjcey6m
+    zstd/1.5.6/gcc/l5c7mfsx binutils/2.42/gcc/y33xj6rq
+    intel-oneapi-compilers/2023.2.4/gcc/4lbvg4hv
+    intel-oneapi-mpi/2021.12.1/intel/hlruk24n rhel8/cclake/intel
+2026-02-16 19:56:09.876 | INFO     | __main__:main:39 - Painting Abacus tSZ map...
+2026-02-16 19:56:09.876 | INFO     | __main__:main:40 - Halo directory: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_halos/z0.542/lightcone_halo_info_000.asdf
+2026-02-16 19:56:09.876 | INFO     | __main__:main:41 - Healcounts file 1: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/halo/heal-counts/LightCone0_halo_heal-counts_Step0671-0676.asdf
+2026-02-16 19:56:09.876 | INFO     | __main__:main:44 - Output file: y_map_abacus.fits
+2026-02-16 19:56:17.000 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:45 - Log thetas array contains 512 elements, smallest: -25.4, largest: 11.5
+2026-02-16 19:56:17.000 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:48 - Redshifts array contains 256 elements, smallest: 0.001, largest: 5.0
+2026-02-16 19:56:17.000 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:51 - Log masses array contains 256 elements, smallest: 11.0, largest: 15.7
+2026-02-16 19:56:17.032 | DEBUG    | tszpaint.y_profile.interpolator:from_matrices:54 - Largest value in prof-y: 0.020307759665103186, smallest: 5.698375820087387e-84
+2026-02-16 19:56:17.137 | INFO     | tszpaint.paint.paint:paint_y:46 - Starting vectorized paint: 716958 halos, nside=2048
+2026-02-16 19:56:17.137 | INFO     | tszpaint.paint.paint:paint_y:47 -   particle_counts: 3221.2MB, dtype=uint32
+Command exited with non-zero status 137
+	Command being timed: "/home/ab2927/.local/bin/uv run -m tszpaint.paint.main"
+	User time (seconds): 542.66
+	System time (seconds): 223.62
+	Percent of CPU this job got: 482%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:38.69
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 209376600
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 188
+	Minor (reclaiming a frame) page faults: 2525789
+	Voluntary context switches: 1244893
+	Involuntary context switches: 36004
+	Swaps: 0
+	File system inputs: 2439344
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 137
+slurmstepd: error: Detected 1 oom_kill event in StepId=22836464.0. Some of the step tasks have been OOM Killed.
+srun: error: cpu-q-583: task 0: Out Of Memory

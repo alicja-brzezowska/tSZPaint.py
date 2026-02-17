@@ -1,0 +1,59 @@
+Loading rhel8/default-ccl
+  Loading requirement: ucx/1.15.0 rhel8/global rhel8/slurm
+    rhel8/cclake-env/2024-06-01 rhel8/cclake/base glibc/2.28/gcc/4d2cj5pu
+    gcc-runtime/13.3.0/gcc/2sn7kkm3 zlib-ng/2.1.6/gcc/mkjcey6m
+    zstd/1.5.6/gcc/l5c7mfsx binutils/2.42/gcc/y33xj6rq
+    intel-oneapi-compilers/2023.2.4/gcc/4lbvg4hv
+    intel-oneapi-mpi/2021.12.1/intel/hlruk24n rhel8/cclake/intel
+2026-02-16 19:11:36.106 | INFO     | __main__:main:39 - Painting Abacus tSZ map...
+2026-02-16 19:11:36.106 | INFO     | __main__:main:40 - Halo directory: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_halos/z0.542/lightcone_halo_info_000.asdf
+2026-02-16 19:11:36.107 | INFO     | __main__:main:41 - Healcounts file 1: /home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/halo/heal-counts/LightCone0_halo_heal-counts_Step0671-0676.asdf
+2026-02-16 19:11:36.107 | INFO     | __main__:main:44 - Output file: y_map_abacus.fits
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/main.py", line 57, in <module>
+    main()
+    ~~~~^^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/main.py", line 46, in main
+    paint_abacus(
+    ~~~~~~~~~~~~^
+        config,
+        ^^^^^^^
+    ...<4 lines>...
+        use_weights=USE_WEIGHTS,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/ab2927/rds/tSZPaint.py/tszpaint/paint/paint.py", line 133, in paint_abacus
+    data = load_abacus_for_painting(
+        halo_dir=halo_dir,
+        healcounts_file_1=healcounts_file_1,
+        nside=config.nside,
+    )
+TypeError: load_abacus_for_painting() got an unexpected keyword argument 'healcounts_file_1'. Did you mean 'healcounts_file'?
+Command exited with non-zero status 1
+	Command being timed: "/home/ab2927/.local/bin/uv run -m tszpaint.paint.main"
+	User time (seconds): 4.50
+	System time (seconds): 0.29
+	Percent of CPU this job got: 36%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:13.10
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 330188
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2814
+	Minor (reclaiming a frame) page faults: 51345
+	Voluntary context switches: 11483
+	Involuntary context switches: 105
+	Swaps: 0
+	File system inputs: 619312
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+srun: error: cpu-q-583: task 0: Exited with exit code 1

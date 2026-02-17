@@ -50,9 +50,15 @@ def paint_y(
 
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
     theta_200 = get_angular_size_from_comoving(MODEL, radius, z)
+    theta_200 = config.search_radius * theta_200  
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
         find_pixels_in_halos(nside, halo_xyz, theta_200)
     )
+
+    logger.info(f"theta_200 stats: min={theta_200.min():.3e}, median={np.median(theta_200):.3e}, max={theta_200.max():.3e}")
+    logger.info(f"pixel-halo pairs: {len(pix_in_halos):,}")
+    logger.info(f"distances bytes: {distances.nbytes/1e9:.2f} GB")
+    logger.info(f"weights expected bytes (float64): {len(distances)*8/1e9:.2f} GB")
 
     if use_weights:
         weights = compute_weights(
@@ -72,17 +78,17 @@ def paint_y(
 
     # Create halo index array to map each pixel to its halo's mass
     log_M_values = log_M[halo_indices]
-    z_values = np.full_like(distances, z, dtype=float)
+    z_values = np.full_like(distances, z, dtype=np.float32)
 
     y_values = interpolator.eval_for_logs(log_distances, z_values, log_M_values)
 
-    y_values_with_weight = y_values * weights
+    y_values *=  weights
 
-    y_map = np.zeros(hp.nside2npix(nside), dtype=float)
-    np.add.at(y_map, pix_in_halos, y_values_with_weight)
+    y_map = np.zeros(hp.nside2npix(nside), dtype=np.float32)
+    np.add.at(y_map, pix_in_halos, y_values)
 
     y_per_halo = np.bincount(
-        halo_indices, weights=y_values_with_weight, minlength=len(M_halos)
+        halo_indices, weights=y_values, minlength=len(M_halos)
     )
 
     return y_map, y_per_halo
@@ -123,8 +129,6 @@ def paint_abacus(
     config: PainterConfig,
     halo_dir: Path,
     healcounts_file_1: Path,
-    healcounts_file_2: Path,
-    healcounts_file_3: Path,
     output_file: str,
     interpolator_path: Path = JAX_PATH,
     use_weights: bool = True,
@@ -135,8 +139,6 @@ def paint_abacus(
     data = load_abacus_for_painting(
         halo_dir=halo_dir,
         healcounts_file_1=healcounts_file_1,
-        healcounts_file_2=healcounts_file_2,
-        healcounts_file_3=healcounts_file_3,
         nside=config.nside,
     )
     paint_and_visualize(config, data, output_file, interpolator_path, use_weights)

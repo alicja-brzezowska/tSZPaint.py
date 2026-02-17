@@ -10,7 +10,7 @@ N = 2  # Multiple of theta_200 to search
 N_BINS = 20  # NOTE: THINK how many bins!
 USE_WEIGHTS = True
 
-MOCK = True
+MOCK = False
 
 
 def main():
@@ -39,16 +39,14 @@ def main():
         logger.info("Painting Abacus tSZ map...")
         logger.info(f"Halo directory: {halo_dir}")
         logger.info(f"Healcounts file 1: {healcounts_file1}")
-        logger.info(f"Healcounts file 2: {healcounts_file2}")
-        logger.info(f"Healcounts file 3: {healcounts_file3}")
+        #logger.info(f"Healcounts file 2: {healcounts_file2}")
+        #logger.info(f"Healcounts file 3: {healcounts_file3}")
         logger.info(f"Output file: {output_file}")
 
         paint_abacus(
             config,
             halo_dir=halo_dir,
             healcounts_file_1=healcounts_file1,
-            healcounts_file_2=healcounts_file2,
-            healcounts_file_3=healcounts_file3,
             output_file=output_file,
             interpolator_path=JAX_PATH,
             use_weights=USE_WEIGHTS,

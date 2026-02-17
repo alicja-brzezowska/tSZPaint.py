@@ -8,6 +8,7 @@ from loguru import logger
 
 from tszpaint.logging import time_calls
 from tszpaint.paint.abacus_loader import SimulationData
+from tszpaint.paint.tree import build_tree
 
 
 @dataclass
@@ -34,8 +35,8 @@ class Visualizer:
 
     nside: int
     output_file_stub: str | None = None
-    scale: float = 6.0
-    output_png_dpi: int = 250
+    scale: float = 6.0  # for zoomed plots
+    output_png_dpi: int = 250 # for zoomed plots
 
     @staticmethod
     def validate_config_and_sim_data(

@@ -9,7 +9,7 @@ HALO_PATH = HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
 
 def main():
     config = PlotConfig.healpix()
-    visualizer = Visualizer(nside=8192, output_file_stub="healpix_comparison")
+    visualizer = Visualizer(nside=8192, output_file_stub="../../data/visualization/healpix_comparison")
 
     visualizer.plot_ra_dec(
         y_map=load_abacus_healcounts(HALO_PATH),
