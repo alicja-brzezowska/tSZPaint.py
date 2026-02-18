@@ -6,7 +6,7 @@ from tszpaint.paint.mock_data_generator import MockDataGenerator
 from tszpaint.paint.paint import paint_abacus, paint_and_visualize
 
 NSIDE = 8192
-N = 0.01  # Multiple of theta_200 to search
+N = 0.1  # Multiple of theta_200 to search
 N_BINS = 20  # NOTE: THINK how many bins!
 USE_WEIGHTS = True
 
