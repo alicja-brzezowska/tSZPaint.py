@@ -1,13 +1,16 @@
-from unittest import result
-import numpy as np
-from numba import prange, jit
+from typing import Literal
 
-from tszpaint.logging import time_calls, trace_calls, memory_usage, array_size
+import numpy as np
+from numba import jit, prange
+
+from tszpaint.logging import array_size, memory_usage, time_calls, trace_calls
 from tszpaint.paint.config import PainterConfig
 
 
 @jit(nopython=True, parallel=True)
-def _fast_init_weights(particle_counts: np.ndarray, pixel_indices: np.ndarray) -> np.ndarray:
+def _fast_init_weights(
+    particle_counts: np.ndarray, pixel_indices: np.ndarray
+) -> np.ndarray:
     """JIT-compiled index lookup and power operation for init_weights."""
     init_weights = np.empty(len(pixel_indices), dtype=np.float64)
     for i in prange(len(pixel_indices)):
@@ -21,8 +24,6 @@ def _fast_init_weights(particle_counts: np.ndarray, pixel_indices: np.ndarray) -
 @array_size
 @time_calls
 @trace_calls
-
-
 @jit(nopython=True, parallel=True)
 def weights_mechanism(
     search_radius: float,
@@ -95,6 +96,7 @@ def compute_weights(
     halo_counts: np.ndarray,
     theta_200: np.ndarray,
     particle_counts: np.ndarray,
+    method: Literal["normal", "vectorized"] = "vectorized",
 ):
     """
     Calculate the proportional weights for pixels based on particle counts.
@@ -102,15 +104,63 @@ def compute_weights(
     # Use JIT-compiled function for fast parallel index lookup and power operation
     init_weights = _fast_init_weights(particle_counts, pixel_indices)
 
-    # Extract config values for JIT function
-    weights = weights_mechanism(
-        config.search_radius,
-        config.n_bins,
-        distances,
-        halo_starts,
-        halo_counts,
-        theta_200,
-        init_weights,
+    if method == "normal":
+        return weights_mechanism(
+            config.search_radius,
+            config.n_bins,
+            distances,
+            halo_starts,
+            halo_counts,
+            theta_200,
+            init_weights,
+        )
+    else:
+        return weights_mechanism_vec(
+            config, distances, halo_counts, theta_200, init_weights
+        )
+
+
+@time_calls
+def weights_mechanism_vec(
+    config: PainterConfig,
+    distances: np.ndarray,
+    halo_counts: np.ndarray,
+    theta_200: np.ndarray,
+    raw_weights: np.ndarray,
+) -> np.ndarray:
+    """
+    Vectorized computation of normalized weights for radial bins around halos.
+
+    For each halo, normalizes particle weights within radial bins so that
+    each bin contributes equally (prevents overdense regions from dominating).
+    """
+    # Create halo ID for each particle
+    halo_ids = np.repeat(np.arange(len(theta_200)), halo_counts)
+
+    # Compute normalized radial coordinate for all particles
+    x = distances / theta_200[halo_ids]  # Distance in units of theta_200
+
+    # Assign particles to radial bins
+    bin_edges = np.linspace(0.0, config.search_radius, config.n_bins + 1)
+    bin_ids = np.searchsorted(bin_edges[1:], x, side="left")
+    bin_ids = np.minimum(bin_ids, config.n_bins - 1)
+
+    # Create composite key: (halo_id, bin_id) for grouping
+    composite_key = halo_ids * config.n_bins + bin_ids
+
+    # Compute bin statistics using bincount
+    unique_keys, inverse_indices = np.unique(composite_key, return_inverse=True)
+
+    bin_counts = np.bincount(inverse_indices, minlength=len(unique_keys))
+    bin_sums = np.bincount(
+        inverse_indices, weights=raw_weights, minlength=len(unique_keys)
     )
+
+    # Compute normalization: count / sum for each bin
+    # This makes each bin contribute equally
+    normalization = np.where(bin_sums > 0, bin_counts / bin_sums, 1.0)
+
+    # Apply normalization to each particle
+    weights = raw_weights * normalization[inverse_indices]
 
     return weights

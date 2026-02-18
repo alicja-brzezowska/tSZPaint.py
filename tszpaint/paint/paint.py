@@ -1,5 +1,5 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
 import healpy as hp
 import numpy as np
@@ -10,7 +10,7 @@ from tszpaint.config import (
 )
 from tszpaint.converters import convert_rad_to_cart
 from tszpaint.cosmology.model import get_angular_size_from_comoving
-from tszpaint.logging import trace_calls, memory_usage, array_size, time_calls
+from tszpaint.logging import array_size, memory_usage, time_calls, trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.pixel_search import find_pixels_in_halos
@@ -20,7 +20,6 @@ from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile.y_profile import (
     create_battaglia_profile,
 )
-from tszpaint.paint.tree import build_tree, query_tree
 
 MODEL = create_battaglia_profile()
 PYTHON_PATH = INTERPOLATORS_PATH / "y_values_python.pkl"
@@ -68,25 +67,27 @@ def paint_y(
         f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
     )
 
-    #tree, pix_xyz, pix_indices = build_tree(config)
+    # tree, pix_xyz, pix_indices = build_tree(config)
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
 
-    theta_200 = get_angular_size_from_comoving(MODEL, radius, z) * config.search_radius 
-    #pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
-    #    config = config, 
+    theta_200 = get_angular_size_from_comoving(MODEL, radius, z) * config.search_radius
+    # pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
+    #    config = config,
     #    halo_xyz = halo_xyz,
     #    theta_200 = theta_200,
     #    particle_tree = tree,
     #    particle_xyz = pix_xyz,
-    #)
+    # )
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
-        find_pixels_in_halos(nside, halo_xyz, theta_200, n_workers = 8)
+        find_pixels_in_halos(nside, halo_xyz, theta_200, n_workers=8)
     )
 
-    logger.info(f"theta_200 stats: min={theta_200.min():.3e}, median={np.median(theta_200):.3e}, max={theta_200.max():.3e}")
+    logger.info(
+        f"theta_200 stats: min={theta_200.min():.3e}, median={np.median(theta_200):.3e}, max={theta_200.max():.3e}"
+    )
     logger.info(f"pixel-halo pairs: {len(pix_in_halos):,}")
-    logger.info(f"distances bytes: {distances.nbytes/1e9:.2f} GB")
-    logger.info(f"weights expected bytes (float64): {len(distances)*8/1e9:.2f} GB")
+    logger.info(f"distances bytes: {distances.nbytes / 1e9:.2f} GB")
+    logger.info(f"weights expected bytes (float64): {len(distances) * 8 / 1e9:.2f} GB")
 
     if use_weights:
         weights = compute_weights(
@@ -97,6 +98,7 @@ def paint_y(
             halo_counts=halo_counts,
             theta_200=theta_200,
             particle_counts=particle_counts,
+            method="vectorized",
         )
     else:
         weights = np.ones(len(pix_in_halos), dtype=np.float64)
@@ -115,9 +117,7 @@ def paint_y(
     y_map = np.zeros(hp.nside2npix(nside), dtype=np.float32)
     np.add.at(y_map, pix_in_halos, y_values)
 
-    y_per_halo = np.bincount(
-        halo_indices, weights=y_values, minlength=len(M_halos)
-    )
+    y_per_halo = np.bincount(halo_indices, weights=y_values, minlength=len(M_halos))
 
     return y_map, y_per_halo
 
