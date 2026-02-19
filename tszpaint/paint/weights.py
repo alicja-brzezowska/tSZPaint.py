@@ -31,12 +31,12 @@ def weights_mechanism(
     distances: np.ndarray,
     halo_starts: np.ndarray,
     halo_counts: np.ndarray,
-    theta_200: np.ndarray,
+    r_90: np.ndarray,
     init_weights: np.ndarray,
 ):
-    """compute normalized weights for each particle contribution within halos."""
+    """Compute normalized weights for each particle contribution within halos."""
 
-    N_halos = len(theta_200)
+    N_halos = len(r_90)
     weights = np.ones_like(distances, dtype=np.float64)
     bin_edges = np.linspace(0.0, search_radius, n_bins + 1)
 
@@ -51,7 +51,7 @@ def weights_mechanism(
         w = init_weights[start : start + count]
 
         # Normalize the angular distance
-        x = d / theta_200[h]
+        x = d / r_90[h]
 
         # For each particle in halo, find which bin it belongs to
         bin_ids = np.searchsorted(bin_edges[1:], x, side="left")
@@ -94,7 +94,7 @@ def compute_weights(
     distances: np.ndarray,
     halo_starts: np.ndarray,
     halo_counts: np.ndarray,
-    theta_200: np.ndarray,
+    r_90: np.ndarray,
     particle_counts: np.ndarray,
     method: Literal["normal", "vectorized"] = "vectorized",
 ):
@@ -111,12 +111,12 @@ def compute_weights(
             distances,
             halo_starts,
             halo_counts,
-            theta_200,
+            r_90,
             init_weights,
         )
     else:
         return weights_mechanism_vec(
-            config, distances, halo_counts, theta_200, init_weights
+            config, distances, halo_counts, r_90, init_weights
         )
 
 
@@ -125,20 +125,15 @@ def weights_mechanism_vec(
     config: PainterConfig,
     distances: np.ndarray,
     halo_counts: np.ndarray,
-    theta_200: np.ndarray,
+    r_90: np.ndarray,
     raw_weights: np.ndarray,
 ) -> np.ndarray:
-    """
-    Vectorized computation of normalized weights for radial bins around halos.
-
-    For each halo, normalizes particle weights within radial bins so that
-    each bin contributes equally (prevents overdense regions from dominating).
-    """
+    """Vectorized computation of normalized weights for radial bins around halos."""
     # Create halo ID for each particle
-    halo_ids = np.repeat(np.arange(len(theta_200)), halo_counts)
+    halo_ids = np.repeat(np.arange(len(r_90)), halo_counts)
 
     # Compute normalized radial coordinate for all particles
-    x = distances / theta_200[halo_ids]  # Distance in units of theta_200
+    x = distances / r_90[halo_ids]  # Distance in units of r_90
 
     # Assign particles to radial bins
     bin_edges = np.linspace(0.0, config.search_radius, config.n_bins + 1)

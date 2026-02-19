@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import healpy as hp
@@ -56,6 +57,7 @@ class Visualizer:
         plt.tight_layout()
         if stub := self.output_file_stub:
             outpath = f"{stub}_{suffix}.png"
+            Path(outpath).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(outpath, dpi=self.output_png_dpi, bbox_inches="tight")
             logger.info(f"Saved: {outpath}")
         else:
@@ -215,6 +217,7 @@ class Visualizer:
         self.finalize_plot("y_vs_m")
         print(f"  Slope = {slope:.3f} +/- {slope_err:.3f}")
         print(f"  Intercept = {intercept:.3f}")
+
 
     @time_calls
     def visualize_y_map(self, y_map: np.ndarray):

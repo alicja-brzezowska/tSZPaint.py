@@ -48,16 +48,16 @@ def build_tree(config: PainterConfig):
 def query_tree(
     config: PainterConfig,
     halo_xyz: np.ndarray,
-    theta_200: np.ndarray,
+    r_90: np.ndarray,
     particle_tree: cKDTree,
     particle_xyz: np.ndarray,
 ):
     """
-    Query the tree out to N times theta_200 to find which pixels belong to which halo.
+    Query the tree out to N times r_90 to find which pixels belong to which halo.
     """
     N_halos = halo_xyz.shape[0]
 
-    search_angles = config.search_radius * theta_200
+    search_angles = config.search_radius * r_90
     search_radii = 2.0 * np.sin(0.5 * search_angles)
 
     pix_in_halos = particle_tree.query_ball_point(x=halo_xyz, r=search_radii)

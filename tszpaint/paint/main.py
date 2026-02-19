@@ -1,12 +1,12 @@
 from loguru import logger
 
-from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH, INTERPOLATORS_PATH
+from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH, INTERPOLATORS_PATH, HEALCOUNTS_TOTAL_PATH
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.mock_data_generator import MockDataGenerator
 from tszpaint.paint.paint import paint_abacus, paint_and_visualize
 
 NSIDE = 8192
-N = 0.1  # Multiple of theta_200 to search
+N = 0.4  # Multiple of r_90 to search
 N_BINS = 20  # NOTE: THINK how many bins!
 USE_WEIGHTS = True
 
@@ -25,7 +25,7 @@ def main():
         config = PainterConfig(NSIDE, N, N_BINS)
         halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
         healcounts_file1 = (
-            HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
+            HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
         )
         healcounts_file2 = (
             HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"

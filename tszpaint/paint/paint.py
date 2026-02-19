@@ -70,20 +70,20 @@ def paint_y(
     # tree, pix_xyz, pix_indices = build_tree(config)
     halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
 
-    theta_200 = get_angular_size_from_comoving(MODEL, radius, z) * config.search_radius
+    r_90 = get_angular_size_from_comoving(MODEL, radius, z) * config.search_radius
     # pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
     #    config = config,
     #    halo_xyz = halo_xyz,
-    #    theta_200 = theta_200,
+    #    r_90 = r_90,
     #    particle_tree = tree,
     #    particle_xyz = pix_xyz,
     # )
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
-        find_pixels_in_halos(nside, halo_xyz, theta_200, n_workers=8)
+        find_pixels_in_halos(nside, halo_xyz, r_90, n_workers=8)
     )
 
     logger.info(
-        f"theta_200 stats: min={theta_200.min():.3e}, median={np.median(theta_200):.3e}, max={theta_200.max():.3e}"
+        f"r_90 stats: min={r_90.min():.3e}, median={np.median(r_90):.3e}, max={r_90.max():.3e}"
     )
     logger.info(f"pixel-halo pairs: {len(pix_in_halos):,}")
     logger.info(f"distances bytes: {distances.nbytes / 1e9:.2f} GB")
@@ -96,7 +96,7 @@ def paint_y(
             distances=distances,
             halo_starts=halo_starts,
             halo_counts=halo_counts,
-            theta_200=theta_200,
+            r_90=r_90,
             particle_counts=particle_counts,
             method="vectorized",
         )
@@ -105,6 +105,11 @@ def paint_y(
 
     log_M = np.log10(M_halos)
     log_distances = np.log(distances + 1e-40)
+
+    logger.info(
+        f"log_distances stats: min={log_distances.min():.3e}, "
+        f"median={np.median(log_distances):.3e}, max={log_distances.max():.3e}"
+    )
 
     # Create halo index array to map each pixel to its halo's mass
     log_M_values = log_M[halo_indices]

@@ -53,13 +53,13 @@ def create_mock_halo_catalogs(n_halos: int):
 
 def query_tree(
     halo_xyz: np.ndarray,
-    theta_200: np.ndarray,
+    r_90: np.ndarray,
     particle_tree: cKDTree,
     particle_xyz: np.ndarray,
     N: float = 4.0,
 ):
     """
-    Query tree for pixels within N×theta_200 of each halo.
+    Query tree for pixels within N×r_90 of each halo.
 
     Returns data in CSR (Compressed Sparse Row) format for GPU efficiency:
     - Flat arrays for all (halo, pixel) pairs
@@ -68,7 +68,7 @@ def query_tree(
     num_halos = halo_xyz.shape[0]
 
     # Search radii (convert angular to 3D Euclidean distance)
-    search_angles = N * theta_200
+    search_angles = N * r_90
     search_radii = 2.0 * np.sin(0.5 * search_angles)
 
     # Query tree (returns list of variable-length arrays)
@@ -141,7 +141,7 @@ def _empty_result(N_halos: int):
 def compute_weights(
     distances: np.ndarray,
     halo_counts: np.ndarray,
-    theta_200: np.ndarray,
+    r_90: np.ndarray,
     raw_weights: np.ndarray,
     N: float,
     nbins: int,
@@ -153,10 +153,10 @@ def compute_weights(
     each bin contributes equally (prevents overdense regions from dominating).
     """
     # Create halo ID for each particle
-    halo_ids = np.repeat(np.arange(len(theta_200)), halo_counts)
+    halo_ids = np.repeat(np.arange(len(r_90)), halo_counts)
 
     # Compute normalized radial coordinate for all particles
-    x = distances / theta_200[halo_ids]  # Distance in units of theta_200
+    x = distances / r_90[halo_ids]  # Distance in units of r_90
 
     # Assign particles to radial bins
     bin_edges = np.linspace(0.0, N, nbins + 1)
@@ -223,12 +223,12 @@ def paint_y_vectorized(
 
     # Convert halo positions and compute characteristic radii
     halo_xyz = convert_rad_to_cart(halo_thetas, halo_phis)
-    theta_200 = compute_theta_200(MODEL, halo_masses, Z=z, delta=200)
+    r_90 = compute_theta_200(MODEL, halo_masses, Z=z, delta=200)
 
-    # Find all (halo, pixel) pairs within N×theta_200
+    # Find all (halo, pixel) pairs within N×r_90
     pixel_indices_flat, distances_flat, halo_starts, halo_counts, _ = query_tree(
         halo_xyz=halo_xyz,
-        theta_200=theta_200,
+        r_90=r_90,
         particle_tree=tree,
         particle_xyz=pix_xyz,
         N=N,
@@ -245,7 +245,7 @@ def paint_y_vectorized(
         weights = compute_weights(
             distances=distances_flat,
             halo_counts=halo_counts,
-            theta_200=theta_200,
+            r_90=r_90,
             raw_weights=raw_weights,
             N=N,
             nbins=nbins,
