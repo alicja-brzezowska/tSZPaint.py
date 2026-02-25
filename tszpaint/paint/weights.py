@@ -38,6 +38,7 @@ def weights_mechanism(
 
     N_halos = len(r_90)
     weights = np.ones_like(distances, dtype=np.float64)
+    # Use bins in x = d / r_90 up to x = search_radius
     bin_edges = np.linspace(0.0, search_radius, n_bins + 1)
 
     for h in prange(N_halos):
@@ -101,13 +102,14 @@ def compute_weights(
     """
     Calculate the proportional weights for pixels based on particle counts.
     """
+    n_bins_eff = max(1, int(round(config.n_bins * config.search_radius)))
     # Use JIT-compiled function for fast parallel index lookup and power operation
     init_weights = _fast_init_weights(particle_counts, pixel_indices)
 
     if method == "normal":
         return weights_mechanism(
             config.search_radius,
-            config.n_bins,
+            n_bins_eff,
             distances,
             halo_starts,
             halo_counts,
@@ -116,19 +118,20 @@ def compute_weights(
         )
     else:
         return weights_mechanism_vec(
-            config, distances, halo_counts, r_90, init_weights
+            config.search_radius, n_bins_eff, distances, halo_counts, r_90, init_weights
         )
 
 
 @time_calls
 def weights_mechanism_vec(
-    config: PainterConfig,
+    search_radius: float,
+    n_bins: int,
     distances: np.ndarray,
     halo_counts: np.ndarray,
     r_90: np.ndarray,
     raw_weights: np.ndarray,
 ) -> np.ndarray:
-    """Vectorized computation of normalized weights for radial bins around halos."""
+    """computation of normalized weights for radial bins around halos."""
     # Create halo ID for each particle
     halo_ids = np.repeat(np.arange(len(r_90)), halo_counts)
 
@@ -136,12 +139,12 @@ def weights_mechanism_vec(
     x = distances / r_90[halo_ids]  # Distance in units of r_90
 
     # Assign particles to radial bins
-    bin_edges = np.linspace(0.0, config.search_radius, config.n_bins + 1)
+    bin_edges = np.linspace(0.0, search_radius, n_bins + 1)
     bin_ids = np.searchsorted(bin_edges[1:], x, side="left")
-    bin_ids = np.minimum(bin_ids, config.n_bins - 1)
+    bin_ids = np.minimum(bin_ids, n_bins - 1)
 
     # Create composite key: (halo_id, bin_id) for grouping
-    composite_key = halo_ids * config.n_bins + bin_ids
+    composite_key = halo_ids * n_bins + bin_ids
 
     # Compute bin statistics using bincount
     unique_keys, inverse_indices = np.unique(composite_key, return_inverse=True)
@@ -152,7 +155,6 @@ def weights_mechanism_vec(
     )
 
     # Compute normalization: count / sum for each bin
-    # This makes each bin contribute equally
     normalization = np.where(bin_sums > 0, bin_counts / bin_sums, 1.0)
 
     # Apply normalization to each particle

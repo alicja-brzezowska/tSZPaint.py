@@ -189,7 +189,7 @@ class Visualizer:
         slope, intercept = coeffs
         slope_err = np.sqrt(cov[0, 0])
 
-        _, ax = plt.subplots(figsize=(8, 6))
+        _, ax = plt.subplots(figsize=(9, 7))
         ax.errorbar(
             centers[good],
             y_mean[good],
@@ -217,6 +217,65 @@ class Visualizer:
         self.finalize_plot("y_vs_m")
         print(f"  Slope = {slope:.3f} +/- {slope_err:.3f}")
         print(f"  Intercept = {intercept:.3f}")
+
+    @time_calls
+    def plot_Y_vs_R200(self, radial_profile: dict):
+        profiles = radial_profile if isinstance(radial_profile, list) else [radial_profile]
+
+        _, ax = plt.subplots(figsize=(8, 6))
+
+        for profile in profiles:
+            x = profile["x_centers"]
+            y = profile["y_mean"]
+            y_err = profile["y_err"]
+            n_sample = profile.get("n_sample", 0)
+            x_ref = profile.get("x_ref")
+            y_battaglia = profile.get("y_battaglia")
+            mass_ref = profile.get("mass_ref")
+            logM_center = profile.get("logM_center")
+
+            if n_sample == 0:
+                continue
+
+            good = np.isfinite(x) & np.isfinite(y) & (y > 0)
+            label_mass = (
+                f"logM={logM_center:.1f}" if logM_center is not None else "all masses"
+            )
+            err = ax.errorbar(
+                x[good],
+                y[good],
+                yerr=y_err[good],
+                fmt="o",
+                ms=4,
+                capsize=2,
+                label=f"Mean at {label_mass} (N={n_sample})",
+            )
+            line_color = err.lines[0].get_color() if err.lines else None
+
+            if x_ref is not None and y_battaglia is not None:
+                ref_good = np.isfinite(y_battaglia) & (y_battaglia > 0)
+                ax.plot(
+                    x_ref[ref_good],
+                    y_battaglia[ref_good],
+                    "--",
+                    lw=2,
+                    color=line_color,
+                    alpha=0.5,
+                    label="_nolegend_",
+                )
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel(r"$r/R_{200}$", fontsize=16)
+        ax.set_ylabel(r"$y$", fontsize=16)
+        ax.set_title(
+            "Compton-$y$ profile vs $r/R_{200}$",
+            fontsize=18,
+        )
+        ax.grid(alpha=0.3)
+        ax.tick_params(axis="both", which="major", labelsize=13)
+        ax.legend(fontsize=10)
+        self.finalize_plot("y_vs_r200")
 
 
     @time_calls

@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+import numba
 
+import asdf
 import healpy as hp
 import numpy as np
 from loguru import logger
@@ -9,7 +11,7 @@ from tszpaint.config import (
     INTERPOLATORS_PATH,
 )
 from tszpaint.converters import convert_rad_to_cart
-from tszpaint.cosmology.model import get_angular_size_from_comoving
+from tszpaint.cosmology.model import compute_theta_200, get_angular_size_from_comoving
 from tszpaint.logging import array_size, memory_usage, time_calls, trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
@@ -46,6 +48,11 @@ def paint_y(
     z: float,
     nside: int,
     use_weights: bool = True,
+    profile_n_halos: int = 0,
+    profile_seed: int = 123,
+    profile_logM_center: float | None = 14.0,
+    profile_logM_centers: list[float] | None = None,
+    profile_logM_halfwidth: float = 0.2,
 ):
     logger.info(
         "CPU threads: "
@@ -56,21 +63,16 @@ def paint_y(
         f"OPENBLAS_NUM_THREADS={os.getenv('OPENBLAS_NUM_THREADS')}, "
         f"NUMEXPR_NUM_THREADS={os.getenv('NUMEXPR_NUM_THREADS')}"
     )
-    try:
-        import numba  # local import to avoid hard dependency at module import time
+    logger.info(f"Numba threads in use: {numba.get_num_threads()}")
 
-        logger.info(f"Numba threads in use: {numba.get_num_threads()}")
-    except Exception:
-        logger.info("Numba threads in use: unavailable")
-    logger.info(f"Starting vectorized paint: {len(M_halos)} halos, nside={nside}")
+    logger.info(f"Starting paint: {len(M_halos)} halos, nside={nside}")
     logger.info(
         f"  particle_counts: {particle_counts.nbytes / 1e6:.1f}MB, dtype={particle_counts.dtype}"
     )
 
+    # if tree:
     # tree, pix_xyz, pix_indices = build_tree(config)
-    halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
 
-    r_90 = get_angular_size_from_comoving(MODEL, radius, z) * config.search_radius
     # pix_in_halos, distances, halo_starts, halo_counts, halo_indices = query_tree(
     #    config = config,
     #    halo_xyz = halo_xyz,
@@ -78,12 +80,20 @@ def paint_y(
     #    particle_tree = tree,
     #    particle_xyz = pix_xyz,
     # )
+
+    halo_xyz = convert_rad_to_cart(halo_theta, halo_phi)
+
+    r_90_phys = get_angular_size_from_comoving(MODEL, radius, z)
+    r_search = r_90_phys * config.search_radius
     pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
-        find_pixels_in_halos(nside, halo_xyz, r_90, n_workers=8)
+        find_pixels_in_halos(nside, halo_xyz, r_search, n_workers=8)
     )
 
     logger.info(
-        f"r_90 stats: min={r_90.min():.3e}, median={np.median(r_90):.3e}, max={r_90.max():.3e}"
+        f"r_90 stats: min={r_90_phys.min():.3e}, median={np.median(r_90_phys):.3e}, max={r_90_phys.max():.3e}"
+    )
+    logger.info(
+        f"r_search stats: min={r_search.min():.3e}, median={np.median(r_search):.3e}, max={r_search.max():.3e}"
     )
     logger.info(f"pixel-halo pairs: {len(pix_in_halos):,}")
     logger.info(f"distances bytes: {distances.nbytes / 1e9:.2f} GB")
@@ -96,13 +106,14 @@ def paint_y(
             distances=distances,
             halo_starts=halo_starts,
             halo_counts=halo_counts,
-            r_90=r_90,
+            r_90=r_90_phys,
             particle_counts=particle_counts,
             method="vectorized",
         )
     else:
         weights = np.ones(len(pix_in_halos), dtype=np.float64)
 
+    
     log_M = np.log10(M_halos)
     log_distances = np.log(distances + 1e-40)
 
@@ -124,7 +135,104 @@ def paint_y(
 
     y_per_halo = np.bincount(halo_indices, weights=y_values, minlength=len(M_halos))
 
-    return y_map, y_per_halo
+    if profile_n_halos <= 0:
+        return y_map, y_per_halo
+
+    def build_profile(logM_center: float | None):
+        rng = np.random.default_rng(profile_seed)
+        if logM_center is None:
+            candidate_halos = np.arange(len(M_halos))
+        else:
+            logM = np.log10(M_halos)
+            in_bin = np.abs(logM - logM_center) <= profile_logM_halfwidth
+            candidate_halos = np.flatnonzero(in_bin)
+
+        n_total = len(candidate_halos)
+        if n_total == 0:
+            return {
+                "x_centers": np.array([]),
+                "y_mean": np.array([]),
+                "y_err": np.array([]),
+                "counts": np.array([]),
+                "n_sample": 0,
+                "x_ref": np.array([]),
+                "y_battaglia": np.array([]),
+                "mass_ref": np.nan,
+                "logM_center": logM_center,
+            }
+
+        n_sample = min(profile_n_halos, n_total)
+        sample_halos = rng.choice(candidate_halos, size=n_sample, replace=False)
+
+        theta_200 = compute_theta_200(MODEL, M_halos, z)
+        ratio = r_search[sample_halos] / theta_200[sample_halos]
+        x_max = np.nanmax(ratio[np.isfinite(ratio)])
+        x_min = max(1e-4, x_max / 1e3)
+        bin_edges = np.logspace(np.log10(x_min), np.log10(x_max), config.n_bins + 1)
+        x_centers = np.sqrt(bin_edges[:-1] * bin_edges[1:])
+
+        sum_y = np.zeros(config.n_bins, dtype=np.float64)
+        sum_y2 = np.zeros(config.n_bins, dtype=np.float64)
+        counts = np.zeros(config.n_bins, dtype=np.float64)
+
+        for h in sample_halos:
+            start = halo_starts[h]
+            count = halo_counts[h]
+            if count == 0:
+                continue
+            d = distances[start : start + count]
+            y = y_values[start : start + count]
+            keep = d <= r_search[h]
+            if not np.any(keep):
+                continue
+            d = d[keep]
+            y = y[keep]
+            x = d / theta_200[h]
+            bin_ids = np.searchsorted(bin_edges[1:], x, side="left")
+            bin_ids = np.minimum(bin_ids, config.n_bins - 1)
+
+            sum_y += np.bincount(bin_ids, weights=y, minlength=config.n_bins)
+            sum_y2 += np.bincount(bin_ids, weights=y**2, minlength=config.n_bins)
+            counts += np.bincount(bin_ids, minlength=config.n_bins)
+
+        with np.errstate(invalid="ignore", divide="ignore"):
+            y_mean = sum_y / counts
+            y_var = sum_y2 / counts - y_mean**2
+            y_std = np.sqrt(np.maximum(y_var, 0.0))
+            y_err = y_std / np.sqrt(counts)
+
+        mass_ref = np.median(M_halos[sample_halos])
+        theta_ref = compute_theta_200(MODEL, np.array([mass_ref]), z)[0]
+        x_ref = np.logspace(np.log10(x_min), np.log10(x_max), 400)
+        theta_values = np.maximum(x_ref * theta_ref, 1e-40)
+        log_theta = np.log(theta_values)
+        log_M = np.full_like(log_theta, np.log10(mass_ref), dtype=np.float64)
+        z_values = np.full_like(log_theta, z, dtype=np.float32)
+        y_battaglia = np.asarray(
+            interpolator.eval_for_logs(log_theta, z_values, log_M)
+        )
+
+        return {
+            "x_centers": x_centers,
+            "y_mean": y_mean,
+            "y_err": y_err,
+            "counts": counts,
+            "n_sample": n_sample,
+            "x_ref": x_ref,
+            "y_battaglia": y_battaglia,
+            "mass_ref": mass_ref,
+            "logM_center": logM_center,
+        }
+
+    if profile_logM_centers is None:
+        profile_logM_centers = [profile_logM_center]
+
+    radial_profiles = [build_profile(center) for center in profile_logM_centers]
+
+    if len(radial_profiles) == 1:
+        return y_map, y_per_halo, radial_profiles[0]
+
+    return y_map, y_per_halo, radial_profiles
 
 
 def paint_y_wrapper(
@@ -132,6 +240,11 @@ def paint_y_wrapper(
     data: SimulationData,
     interpolator: BattagliaLogInterpolator,
     use_weights: bool = True,
+    profile_n_halos: int = 50,
+    profile_seed: int = 123,
+    profile_logM_center: float | None = 14.0,
+    profile_logM_centers: list[float] | None = None,
+    profile_logM_halfwidth: float = 0.2,
 ):
     """
     Paint y-map wrapper
@@ -147,6 +260,11 @@ def paint_y_wrapper(
         data.redshift,
         config.nside,
         use_weights,
+        profile_n_halos,
+        profile_seed,
+        profile_logM_center,
+        profile_logM_centers,
+        profile_logM_halfwidth,
     )
 
 
@@ -185,18 +303,41 @@ def paint_and_visualize(
     use_weights: bool = True,
 ):
     interpolator = load_interpolator(interpolator_path)
-    y_map, y_per_halo = paint_y_wrapper(
+    y_map, y_per_halo, radial_profile = paint_y_wrapper(
         config,
         data,
         interpolator=interpolator,
         use_weights=use_weights,
+        profile_n_halos=1000,
+        profile_logM_centers=[13.0, 13.7, 14.0, 14.7, 15.0],
     )
     display_map_statistics(y_map)
+    output_stub = None
     if output_file:
-        hp.write_map(output_file, y_map, overwrite=True, nest=True)
-        logger.info(f"Saved to {output_file}")
+        output_path = Path(output_file)
+        if output_path.suffix == "":
+            output_path = output_path.with_suffix(".asdf")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    vis = Visualizer(config.nside, output_file)
+        if output_path.suffix == ".asdf":
+            af = asdf.AsdfFile(
+                {
+                    "data": {
+                        "y_map": y_map,
+                        "nside": config.nside,
+                        "nest": True,
+                    }
+                }
+            )
+            af.write_to(output_path)
+        else:
+            hp.write_map(output_path, y_map, overwrite=True, nest=True)
+
+        logger.info(f"Saved to {output_path}")
+        output_stub = str(output_path.with_suffix(""))
+
+    vis = Visualizer(config.nside, output_stub)
     vis.plot_ra_dec(y_map, PlotConfig.standard(), sim_data=data)
     vis.plot_Y_vs_M(data, y_per_halo)
-    vis.visualize_y_map(y_map)
+    vis.plot_Y_vs_R200(radial_profile)
+    #vis.visualize_y_map(y_map)

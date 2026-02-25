@@ -1,14 +1,22 @@
+from datetime import datetime
+
 from loguru import logger
 
-from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH, INTERPOLATORS_PATH, HEALCOUNTS_TOTAL_PATH
+from tszpaint.config import (
+    DATA_PATH,
+    HALO_CATALOGS_PATH,
+    HEALCOUNTS_PATH,
+    HEALCOUNTS_TOTAL_PATH,
+    INTERPOLATORS_PATH,
+)
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.mock_data_generator import MockDataGenerator
 from tszpaint.paint.paint import paint_abacus, paint_and_visualize
 
 NSIDE = 8192
-N = 0.4  # Multiple of r_90 to search
+N = 4  # Multiple of r_90/ r_95 / r_98 to search
 N_BINS = 20  # NOTE: THINK how many bins!
-USE_WEIGHTS = True
+USE_WEIGHTS = False
 
 MOCK = False
 
@@ -31,10 +39,12 @@ def main():
             HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
         )
         healcounts_file3 = (
-            HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0665-0670.asdf"
+            HEALCOUNTS_PATH / "LightCone0_total_heal-counts_Step0665-0670.asdf"
         )
         JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
-        output_file = "y_map_abacus.fits"
+        date_dir = datetime.now().strftime("%Y-%m-%d")
+        output_dir = DATA_PATH / "visualization" / date_dir
+        output_file = output_dir / "3r98-halo-normalized-bin.asdf"
 
         logger.info("Painting Abacus tSZ map...")
         logger.info(f"Halo directory: {halo_dir}")
