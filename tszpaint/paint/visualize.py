@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -9,7 +10,7 @@ from loguru import logger
 
 from tszpaint.logging import time_calls
 from tszpaint.paint.abacus_loader import SimulationData
-from tszpaint.paint.tree import build_tree
+from tszpaint.scripts.radial_profile import RadialProfile
 
 
 @dataclass
@@ -221,52 +222,37 @@ class Visualizer:
         print(f"  Intercept = {intercept:.3f}")
 
     @time_calls
-    def plot_Y_vs_R200(self, radial_profile: dict):
-        profiles = (
-            radial_profile if isinstance(radial_profile, list) else [radial_profile]
-        )
-
+    def plot_Y_vs_R200(self, radial_profiles: Iterable[RadialProfile]):
         _, ax = plt.subplots(figsize=(8, 6))
 
-        for profile in profiles:
-            x = profile["x_centers"]
-            y = profile["y_mean"]
-            y_err = profile["y_err"]
-            n_sample = profile.get("n_sample", 0)
-            x_ref = profile.get("x_ref")
-            y_battaglia = profile.get("y_battaglia")
-            mass_ref = profile.get("mass_ref")
-            logM_center = profile.get("logM_center")
-
-            if n_sample == 0:
-                continue
-
-            good = np.isfinite(x) & np.isfinite(y) & (y > 0)
-            label_mass = (
-                f"logM={logM_center:.1f}" if logM_center is not None else "all masses"
+        for profile in radial_profiles:
+            good = (
+                np.isfinite(profile.x_centers)
+                & np.isfinite(profile.y_mean)
+                & (profile.y_mean > 0)
             )
+            label_mass = f"logM={profile.logM_center:.1f}"
             err = ax.errorbar(
-                x[good],
-                y[good],
-                yerr=y_err[good],
+                profile.x_centers[good],
+                profile.y_mean[good],
+                yerr=profile.y_err[good],
                 fmt="o",
                 ms=4,
                 capsize=2,
-                label=f"Mean at {label_mass} (N={n_sample})",
+                label=f"Mean at {label_mass} (N={profile.num_samples})",
             )
             line_color = err.lines[0].get_color() if err.lines else None
 
-            if x_ref is not None and y_battaglia is not None:
-                ref_good = np.isfinite(y_battaglia) & (y_battaglia > 0)
-                ax.plot(
-                    x_ref[ref_good],
-                    y_battaglia[ref_good],
-                    "--",
-                    lw=2,
-                    color=line_color,
-                    alpha=0.5,
-                    label="_nolegend_",
-                )
+            ref_good = np.isfinite(profile.y_battaglia) & (profile.y_battaglia > 0)
+            ax.plot(
+                profile.x_ref[ref_good],
+                profile.y_battaglia[ref_good],
+                "--",
+                lw=2,
+                color=line_color,
+                alpha=0.5,
+                label="_nolegend_",
+            )
 
         ax.set_xscale("log")
         ax.set_yscale("log")

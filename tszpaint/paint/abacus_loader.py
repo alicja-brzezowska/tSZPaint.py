@@ -5,7 +5,7 @@ import asdf
 import healpy as hp
 import numpy as np
 
-from tszpaint.converters import convert_comoving_to_sky
+from tszpaint.converters import convert_comoving_to_sky, convert_rad_to_cart
 
 
 @dataclass
@@ -16,6 +16,10 @@ class SimulationData:
     particle_counts: np.ndarray
     redshift: float
     radii_halos: np.ndarray
+
+    @property
+    def halo_xyz(self):
+        return convert_rad_to_cart(self.theta, self.phi)
 
 
 def load_abacus_healcounts(filepath: Path):
