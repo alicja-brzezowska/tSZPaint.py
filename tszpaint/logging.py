@@ -70,13 +70,15 @@ def memory_usage(
 
     process = psutil.Process(os.getpid())
     mem_before = process.memory_info().rss / 1e6
-    
+
     result = wrapped(*args, **kwargs)
-    
+
     mem_after = process.memory_info().rss / 1e6
     delta = mem_after - mem_before
-    logger.info(f"[MEMORY] {wrapped.__qualname__}: {mem_before:.1f}MB → {mem_after:.1f}MB (Δ{delta:+.1f}MB)")
-    
+    logger.info(
+        f"[MEMORY] {wrapped.__qualname__}: {mem_before:.1f}MB → {mem_after:.1f}MB (Δ{delta:+.1f}MB)"
+    )
+
     return result
 
 
@@ -88,14 +90,18 @@ def array_size(
     kwargs: dict[str, Any],
 ) -> R:
     result = wrapped(*args, **kwargs)
-    
+
     if isinstance(result, np.ndarray):
         size_mb = result.nbytes / 1e6
-        logger.info(f"[ARRAY] {wrapped.__qualname__}: {size_mb:.1f}MB (dtype={result.dtype}, shape={result.shape})")
+        logger.info(
+            f"[ARRAY] {wrapped.__qualname__}: {size_mb:.1f}MB (dtype={result.dtype}, shape={result.shape})"
+        )
     elif isinstance(result, tuple) and any(isinstance(r, np.ndarray) for r in result):
         for i, r in enumerate(result):
             if isinstance(r, np.ndarray):
                 size_mb = r.nbytes / 1e6
-                logger.info(f"[ARRAY] {wrapped.__qualname__}[{i}]: {size_mb:.1f}MB (dtype={r.dtype}, shape={r.shape})")
-    
+                logger.info(
+                    f"[ARRAY] {wrapped.__qualname__}[{i}]: {size_mb:.1f}MB (dtype={r.dtype}, shape={r.shape})"
+                )
+
     return result

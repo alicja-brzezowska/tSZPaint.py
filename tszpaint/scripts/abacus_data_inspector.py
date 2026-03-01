@@ -1,4 +1,3 @@
-
 import asdf
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 
@@ -43,10 +42,9 @@ def inspect_file(filepath, name):
                     print(f"  {key}: dict with keys: {list(data.keys())}")
                 if key == "headers" and isinstance(data, list):
                     print(f"  {key}: list with {len(data)} items")
-                    #for i, item in enumerate(data):
+                    # for i, item in enumerate(data):
                     #    print(f"\n    --- headers[{i}] ---")
                     #    print(item)
-
 
     except Exception:
         with open(filepath, "r") as f:

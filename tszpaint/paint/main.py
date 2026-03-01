@@ -24,13 +24,17 @@ MOCK = False
 def main():
     if MOCK:
         nside = 1024
-        config = PainterConfig(nside=nside, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH)
+        config = PainterConfig(
+            nside=nside, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH
+        )
         gen = MockDataGenerator(100, nside=nside)
         data = gen.generate_simulation_data()
         paint_and_visualize(config, data, None)
 
     else:
-        config = PainterConfig(nside=NSIDE, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH)
+        config = PainterConfig(
+            nside=NSIDE, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH
+        )
         halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
         healcounts_file1 = (
             HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
@@ -49,8 +53,8 @@ def main():
         logger.info("Painting Abacus tSZ map...")
         logger.info(f"Halo directory: {halo_dir}")
         logger.info(f"Healcounts file 1: {healcounts_file1}")
-        #logger.info(f"Healcounts file 2: {healcounts_file2}")
-        #logger.info(f"Healcounts file 3: {healcounts_file3}")
+        # logger.info(f"Healcounts file 2: {healcounts_file2}")
+        # logger.info(f"Healcounts file 3: {healcounts_file3}")
         logger.info(f"Output file: {output_file}")
 
         paint_abacus(

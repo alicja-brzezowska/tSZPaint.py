@@ -37,7 +37,7 @@ class Visualizer:
     nside: int
     output_file_stub: str | None = None
     scale: float = 6.0  # for zoomed plots
-    output_png_dpi: int = 250 # for zoomed plots
+    output_png_dpi: int = 250  # for zoomed plots
 
     @staticmethod
     def validate_config_and_sim_data(
@@ -140,7 +140,9 @@ class Visualizer:
         self.validate_config_and_sim_data(config, sim_data)
 
         suffix = (
-            f"healpix_ra_dec_zoom_{filename_suffix}" if config == PlotConfig.healpix() else f"y_ra_dec_zoom_{filename_suffix}"
+            f"healpix_ra_dec_zoom_{filename_suffix}"
+            if config == PlotConfig.healpix()
+            else f"y_ra_dec_zoom_{filename_suffix}"
         )
 
         self._plot_gnomview(y_map, (ra_deg, dec_deg), config, suffix, sim_data)
@@ -220,7 +222,9 @@ class Visualizer:
 
     @time_calls
     def plot_Y_vs_R200(self, radial_profile: dict):
-        profiles = radial_profile if isinstance(radial_profile, list) else [radial_profile]
+        profiles = (
+            radial_profile if isinstance(radial_profile, list) else [radial_profile]
+        )
 
         _, ax = plt.subplots(figsize=(8, 6))
 
@@ -276,7 +280,6 @@ class Visualizer:
         ax.tick_params(axis="both", which="major", labelsize=13)
         ax.legend(fontsize=10)
         self.finalize_plot("y_vs_r200")
-
 
     @time_calls
     def visualize_y_map(self, y_map: np.ndarray):

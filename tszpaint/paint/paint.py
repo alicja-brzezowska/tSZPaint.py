@@ -207,8 +207,6 @@ def paint_y(
     else:
         weights = np.ones(len(pix_in_halos), dtype=np.float64)
 
-
-
     log_M = np.log10(M_halos)
     log_distances = np.log(distances + 1e-40)
 
@@ -303,7 +301,15 @@ def paint_abacus(
         healcounts_file_1=healcounts_file_1,
         nside=config.nside,
     )
-    paint_and_visualize(config, data, halo_dir, healcounts_file_1, output_file, interpolator_path, use_weights)
+    paint_and_visualize(
+        config,
+        data,
+        halo_dir,
+        healcounts_file_1,
+        output_file,
+        interpolator_path,
+        use_weights,
+    )
 
 
 def paint_and_visualize(
@@ -326,38 +332,36 @@ def paint_and_visualize(
     output_stub = None
     if output_file:
         output_path = Path(output_file)
-        if output_path.suffix == "":
-            output_path = output_path.with_suffix(".asdf")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if output_path.suffix == ".asdf":
-            halo_index = np.arange(len(data.m_halos), dtype=np.int64)
-            af = asdf.AsdfFile(
-                {
-                    "header": {
-                        "nside": config.nside,
-                        "nest": True,
-                        "redshift": data.redshift,
-                        "search_radius_multiplier": config.search_radius,
-                        "bin_width": config.weight_bin_width,
-                        "healpix_file": str(healcounts_file_1) if healcounts_file_1 is not None else None,
-                        "halo_catalog_file": str(halo_dir) if halo_dir is not None else None,
-                    },
-                    "data": {
-                        "y_map": y_map,
-                        "halo_index": halo_index,
-                        "theta_halo": data.theta,
-                        "phi_halo": data.phi,
-                        "y_per_halo": y_per_halo,
-                        "halo_M": data.m_halos,
-                        "r98_halo": data.radii_halos,
-                        "radial_profile": radial_profile,
-                    },
-                }
-            )
-            af.write_to(output_path)
-        else:
-            hp.write_map(output_path, y_map, overwrite=True, nest=True)
+        halo_index = np.arange(len(data.m_halos), dtype=np.int64)
+        af = asdf.AsdfFile(
+            {
+                "header": {
+                    "nside": config.nside,
+                    "nest": True,
+                    "redshift": data.redshift,
+                    "search_radius_multiplier": config.search_radius,
+                    "bin_width": config.weight_bin_width,
+                    "healpix_file": str(healcounts_file_1)
+                    if healcounts_file_1 is not None
+                    else None,
+                    "halo_catalog_file": str(halo_dir)
+                    if halo_dir is not None
+                    else None,
+                },
+                "data": {
+                    "y_map": y_map,
+                    "halo_index": halo_index,
+                    "theta_halo": data.theta,
+                    "phi_halo": data.phi,
+                    "y_per_halo": y_per_halo,
+                    "halo_M": data.m_halos,
+                    "r98_halo": data.radii_halos,
+                    "radial_profile": radial_profile,
+                },
+            }
+        )
+        af.write_to(output_path)
 
         logger.info(f"Saved to {output_path}")
         output_stub = str(output_path.with_suffix(""))
@@ -366,4 +370,4 @@ def paint_and_visualize(
     vis.plot_ra_dec(y_map, PlotConfig.standard(), sim_data=data)
     vis.plot_Y_vs_M(data, y_per_halo)
     vis.plot_Y_vs_R200(radial_profile)
-    #vis.visualize_y_map(y_map)
+    # vis.visualize_y_map(y_map)

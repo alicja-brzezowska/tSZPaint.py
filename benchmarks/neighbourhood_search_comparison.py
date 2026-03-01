@@ -33,9 +33,7 @@ class BenchmarkResult:
     n_pixels_found: int
 
 
-def run_kdtree_benchmark(
-    config: PainterConfig, halo_xyz: np.ndarray, r_90: np.ndarray
-):
+def run_kdtree_benchmark(config: PainterConfig, halo_xyz: np.ndarray, r_90: np.ndarray):
     start = time.time()
     tree, pix_xyz, _ = build_tree(config)
     build_time = time.time() - start

@@ -6,8 +6,6 @@ Y_PROFILE_DATA_PATH = DATA_PATH / "y_profile"
 
 
 ABACUS_DATA_PATH = Path("/home/ab2927/rds/hpc-work/backlight_cp999")
-HALO_CATALOGS_PATH = ABACUS_DATA_PATH / "lightcone_halos" 
+HALO_CATALOGS_PATH = ABACUS_DATA_PATH / "lightcone_halos"
 HEALCOUNTS_PATH = ABACUS_DATA_PATH / "lightcone_healpix" / "halo" / "heal-counts"
 HEALCOUNTS_TOTAL_PATH = ABACUS_DATA_PATH / "lightcone_healpix" / "total" / "heal-counts"
-
-
