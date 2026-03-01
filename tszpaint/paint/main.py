@@ -15,7 +15,7 @@ from tszpaint.paint.paint import paint_abacus, paint_and_visualize
 
 NSIDE = 8192
 N = 4  # Multiple of r_90/ r_95 / r_98 to search
-N_BINS = 20  # NOTE: THINK how many bins!
+WEIGHT_BIN_WIDTH = 2e-5
 USE_WEIGHTS = False
 
 MOCK = False
@@ -24,13 +24,13 @@ MOCK = False
 def main():
     if MOCK:
         nside = 1024
-        config = PainterConfig(nside, N, N_BINS)
+        config = PainterConfig(nside=nside, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH)
         gen = MockDataGenerator(100, nside=nside)
         data = gen.generate_simulation_data()
         paint_and_visualize(config, data, None)
 
     else:
-        config = PainterConfig(NSIDE, N, N_BINS)
+        config = PainterConfig(nside=NSIDE, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH)
         halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
         healcounts_file1 = (
             HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
@@ -44,7 +44,7 @@ def main():
         JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
         date_dir = datetime.now().strftime("%Y-%m-%d")
         output_dir = DATA_PATH / "visualization" / date_dir
-        output_file = output_dir / "3r98-halo-normalized-bin.asdf"
+        output_file = output_dir / "4r98-total.asdf"
 
         logger.info("Painting Abacus tSZ map...")
         logger.info(f"Halo directory: {halo_dir}")

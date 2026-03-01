@@ -1,5 +1,6 @@
 from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
 import asdf
+from pathlib import Path
 
 
 

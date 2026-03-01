@@ -27,6 +27,22 @@ DELTA = 200
 SCALE = 1e9
 ZMAX = 1e5
 RTOL = 1e-3  # saw that this was sufficient in tests, can change
+MASS_BREAK = 2e14 # M_Sun: below that need break model: #alpha_break neq 1 
+
+
+uniform_scale = jnp.linspace(0.5, 1.5, 5) # 125 points
+
+
+# from Pandey 2023:
+A_P0_prior = jnp.linspace(2,40,5)
+A_xc_prior = jnp.linspace(0.3,0.7,5)
+
+
+# motivated by simulations: good estimates
+A_xc_sim = 0.497 * uniform_scale
+A_P0_sim = 18.1 * uniform_scale
+A_beta_sim = 4.35  * uniform_scale
+
 
 
 def get_gnfw_params(mass: float, redshift: float):
@@ -34,13 +50,16 @@ def get_gnfw_params(mass: float, redshift: float):
     m = mass / 1e14
 
     # From Battaglia et al. 2016
-    P0 = 18.1 * m**0.154 * z1 ** (-0.758)
-    xc = 0.497 * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
-    beta = 4.35 * m**0.0393 * z1**0.415
-    alpha = 1.0
+    P0 = A_P0_prior * m**0.154 * z1 ** (-0.758)
+    xc = A_xc * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
+    beta = A_beta * m**0.0393 * z1**0.415
+    alpha = 1.0 
     gamma = -0.3
-    beta = gamma - alpha * beta  # Sigurd's conversion from Battaglia to standard NFW
-    return xc, alpha, beta, gamma, P0
+    beta = gamma - alpha * beta # Sigurd's conversion from Battaglia to standard NFW
+    alpha_break = 1.0
+    break_factor = (m / MASS_BREAK) ** alpha_break if mass < MASS_BREAK else 1.0 #(Pandey 2023)
+    return xc, alpha, beta, gamma, P0, break_factor 
+
 
 
 def critical_density(redshift: float, H0_cgs: float, Om0: float):

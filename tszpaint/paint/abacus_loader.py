@@ -27,11 +27,7 @@ def load_abacus_healcounts(filepath: Path):
 
 def degrade_healcounts(particle_counts: np.ndarray, nside_out: int) -> np.ndarray:
     """
-    Degrade HEALPix particle counts from their current resolution to a lower resolution for testing.
-    
-    The input resolution (nside_in) is inferred from the particle_counts array size
-    using the HEALPix relation: npix = 12 * nside^2
-    
+    Degrade HEALPix particle counts from their current resolution to a lower resolution for testing.   
     Args:
         particle_counts: Array of particle counts at original resolution
         nside_out: Output nside (e.g., 2048)
@@ -58,19 +54,6 @@ def obtain_healcount_edges(filepath: Path):
     return min(chis), max(chis)
 
 
-def load_multiple_healcounts(
-    filepath1: Path,
-    filepath2: Path,
-    filepath3: Path,
-):
-    counts1 = load_abacus_healcounts(filepath1)
-    counts2 = load_abacus_healcounts(filepath2)
-    counts3 = load_abacus_healcounts(filepath3)
-
-    sum_counts = counts1 + counts2 + counts3
-    return sum_counts
-
-
 def load_abacus_halos(
     halo_dir: Path,
 ):
@@ -89,7 +72,7 @@ def load_abacus_halos(
 
         m_halos = num_particles.astype(np.float64) * particle_mass
 
-        # most signal from larger halos
+        # most signal from larger halos (Battaglia 2012)
         threshold = 1e12
         cut = m_halos > threshold
 
@@ -119,7 +102,7 @@ def load_abacus_halos(
 def load_abacus_for_painting(
     halo_dir: Path,
     healcounts_file_1: Path,
-    nside: int = 8192,
+    nside: int | None = None,
 ):
     pos, num_particles, particle_mass, redshift, radius, comoving_distance = load_abacus_halos(
         halo_dir,
@@ -136,7 +119,8 @@ def load_abacus_for_painting(
 
     m_halos = num_particles.astype(np.float64) * particle_mass
     particle_counts = load_abacus_healcounts(healcounts_file_1)
-    
-    particle_counts = degrade_healcounts(particle_counts, nside_out=nside)
+    if nside is not None:
+        particle_counts = degrade_healcounts(particle_counts, nside_out=nside)
+
 
     return SimulationData(theta, phi, m_halos, particle_counts, redshift, radius)
