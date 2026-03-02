@@ -18,22 +18,7 @@ def find_pixels_in_halos(
     nest: bool = True,
     n_workers: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-
-    Args:
-        nside: HEALPix resolution parameter (npix = 12 x nside^2)
-        halo_xyz: Halo positions as unit cartesian vectors, shape (N_halos, 3)
-        search_radii: Search radius for each halo in radians, shape (N_halos,)
-        nest: Use nested pixel ordering (recommended for spatial locality)
-        n_workers: Number of parallel workers to use (default: all available CPUs)
-    Returns:
-        pixel_indices: Flattened array of all pixel indices across all halos
-        distances: Angular distance (radians) from each pixel to its halo center
-        halo_starts: Starting index in flattened arrays for each halo
-        halo_counts: Number of pixels found for each halo
-        halo_indices: Halo index for each pixel (for vectorized operations)
-
-    """
+    """ """
 
     if n_workers is None:
         n_workers = os.cpu_count()
@@ -54,6 +39,7 @@ def find_pixels_in_halos(
             return i, np.array([], dtype=np.int64), np.array([])
 
         pix_vecs = hp.pix2vec(nside, pixels, nest=nest)
+        # cal
         distances = hp.rotator.angdist(halo_xyz[i], pix_vecs)
 
         return i, pixels, distances

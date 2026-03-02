@@ -69,7 +69,7 @@ def load_abacus_halos(
         box_size = h["BoxSizeMpc"]
 
         d = af["halo_lightcone"]
-        positions = np.asarray(d["Interpolated_x_L2com"])
+        halo_xyz = np.asarray(d["Interpolated_x_L2com"])
         num_particles = np.asarray(d["Interpolated_N"])
         comoving_distance = np.asarray(d["Interpolated_ComovingDist"])
         halo_timeslice_index = np.asarray(d["halo_timeslice_index"])
@@ -80,7 +80,7 @@ def load_abacus_halos(
         threshold = 1e12
         cut = m_halos > threshold
 
-        positions = positions[cut]
+        halo_xyz = halo_xyz[cut]
 
         num_particles = num_particles[cut]
         m_halos = m_halos[cut]
@@ -98,7 +98,7 @@ def load_abacus_halos(
         INT16SCALE = 32000
         radius = radius * r100_ref * box_size / INT16SCALE
 
-    return positions, num_particles, particle_mass, redshift, radius, comoving_distance
+    return halo_xyz, num_particles, particle_mass, redshift, radius, comoving_distance
 
 
 def load_abacus_for_painting(
@@ -106,7 +106,7 @@ def load_abacus_for_painting(
     healcounts_file_1: Path,
     nside: int | None = None,
 ):
-    pos, num_particles, particle_mass, redshift, radius, comoving_distance = (
+    halo_xyz, num_particles, particle_mass, redshift, radius, comoving_distance = (
         load_abacus_halos(
             halo_dir,
         )
@@ -115,11 +115,11 @@ def load_abacus_for_painting(
     chi_min, chi_max = obtain_healcount_edges(healcounts_file_1)
     chi_range = (comoving_distance >= chi_min) & (comoving_distance <= chi_max)
 
-    pos = pos[chi_range]
+    halo_xyz = halo_xyz[chi_range]
     num_particles = num_particles[chi_range]
     radius = radius[chi_range]
 
-    theta, phi = convert_comoving_to_sky(pos)
+    theta, phi = convert_comoving_to_sky(halo_xyz)
 
     m_halos = num_particles.astype(np.float64) * particle_mass
     particle_counts = load_abacus_healcounts(healcounts_file_1)
