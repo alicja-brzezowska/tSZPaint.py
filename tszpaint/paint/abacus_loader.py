@@ -6,6 +6,7 @@ import healpy as hp
 import numpy as np
 
 from tszpaint.converters import convert_comoving_to_sky, convert_rad_to_cart
+from abacusnbody.data.compaso_halo_catalog import _unpack_euler16 as unpack_euler16  # this is directly from 
 
 
 @dataclass
@@ -16,6 +17,8 @@ class SimulationData:
     particle_counts: np.ndarray
     redshift: float
     radii_halos: np.ndarray
+    eigenvalues: np.ndarray   # (n_halos, 3) semi-axis lengths in physical Mpc
+    eigenvectors: np.ndarray  # (n_halos, 3, 3) rows are [min, mid, maj] eigenvectors
 
     @property
     def halo_xyz(self):
@@ -77,7 +80,8 @@ def load_abacus_halos(
         m_halos = num_particles.astype(np.float64) * particle_mass
 
         # most signal from larger halos (Battaglia 2012)
-        threshold = 1e12
+        logm_threshold = 11.7
+        threshold = 10**logm_threshold
         cut = m_halos > threshold
 
         halo_xyz = halo_xyz[cut]
@@ -92,21 +96,44 @@ def load_abacus_halos(
         e = af["halo_timeslice"]
         radius = np.asarray(e["r98_L2com_i16"], dtype=np.float64)
         r100_ref = np.asarray(e["r100_L2com"], dtype=np.float64)
+
+        # triaxial halos
+        eigenvalues = np.asarray(e["sigmar_L2com_i16"], dtype=np.float64)
+        eigenvectors = np.asarray(e["sigmar_eigenvecs_L2com_u16"], dtype=np.float64)
+        # u16 is a smart custom encoding of the eigenvectors 
+        sigmar_min, sigmar_mid, sigmar_maj = unpack_euler16(eigenvectors)
+
         radius = radius[halo_timeslice_index]
         r100_ref = r100_ref[halo_timeslice_index]
 
+        eigenvalues = eigenvalues[halo_timeslice_index]   # (n_halos, 3)
+        sigmar_min = sigmar_min[halo_timeslice_index]     # (n_halos, 3)
+        sigmar_mid = sigmar_mid[halo_timeslice_index]
+        sigmar_maj = sigmar_maj[halo_timeslice_index]
+
         INT16SCALE = 32000
         radius = radius * r100_ref * box_size / INT16SCALE
+        eigenvalues = eigenvalues * r100_ref[:, np.newaxis] * box_size / INT16SCALE
 
-    return halo_xyz, num_particles, particle_mass, redshift, radius, comoving_distance
+        eigenvectors = np.stack([sigmar_min, sigmar_mid, sigmar_maj], axis=1)  # (n_halos, 3, 3)
 
+    return (
+        halo_xyz,
+        num_particles,
+        particle_mass,
+        redshift,
+        radius,
+        comoving_distance,
+        eigenvalues,
+        eigenvectors,
+    )
 
 def load_abacus_for_painting(
     halo_dir: Path,
     healcounts_file_1: Path,
     nside: int | None = None,
 ):
-    halo_xyz, num_particles, particle_mass, redshift, radius, comoving_distance = (
+    halo_xyz, num_particles, particle_mass, redshift, radius, comoving_distance, eigenvalues, eigenvectors = (
         load_abacus_halos(
             halo_dir,
         )
@@ -118,6 +145,8 @@ def load_abacus_for_painting(
     halo_xyz = halo_xyz[chi_range]
     num_particles = num_particles[chi_range]
     radius = radius[chi_range]
+    eigenvalues = eigenvalues[chi_range]
+    eigenvectors = eigenvectors[chi_range]
 
     theta, phi = convert_comoving_to_sky(halo_xyz)
 
@@ -126,4 +155,4 @@ def load_abacus_for_painting(
     if nside is not None:
         particle_counts = degrade_healcounts(particle_counts, nside_out=nside)
 
-    return SimulationData(theta, phi, m_halos, particle_counts, redshift, radius)
+    return SimulationData(theta, phi, m_halos, particle_counts, redshift, radius, eigenvalues, eigenvectors)

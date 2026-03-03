@@ -26,8 +26,8 @@ class PlotConfig:
     def standard(cls):
         return cls("standard", 10**-20, "Painting output", "log10(y)")
 
-    @classmethod
-    def healpix(cls):
+    @classmethod 
+    def healpix(cls): # for initial maps: pre-painting 
         return cls("healpix", 1, "Healpix output", "log10(counts+1)")
 
 
@@ -73,6 +73,8 @@ class Visualizer:
         suffix: str,
         sim_data: SimulationData | None = None,
         xsize: int = 4000,
+        zoom_scale: float | None = None,
+        show_halo_centers: bool = True,
     ):
         """Core gnomonic projection plotting logic."""
         plt.figure(figsize=(10, 10))
@@ -84,7 +86,8 @@ class Visualizer:
             map_data,
             rot=list(rot),
             xsize=xsize,
-            reso=self.resolution,
+            reso=hp.nside2resol(self.nside, arcmin=True)
+            / (zoom_scale if zoom_scale is not None else self.scale),
             nest=True,
             title=title,
             unit=config.unit,
@@ -92,7 +95,7 @@ class Visualizer:
         )
         hp.graticule()
 
-        if sim_data is not None:
+        if sim_data is not None and show_halo_centers:
             halo_lon = np.degrees(sim_data.phi)
             halo_lat = 90.0 - np.degrees(sim_data.theta)
             hp.projscatter(
@@ -105,8 +108,8 @@ class Visualizer:
                 alpha=0.7,
                 label="Halo centers",
             )
+            plt.legend()
 
-        plt.legend()
         self.finalize_plot(suffix)
 
     @time_calls
@@ -136,6 +139,8 @@ class Visualizer:
         dec_deg: float = -0.047,
         sim_data: SimulationData | None = None,
         filename_suffix: str = "",
+        zoom_scale: float | None = None,
+        show_halo_centers: bool = True,
     ):
         """Zoom to specific RA/Dec coordinates."""
         self.validate_config_and_sim_data(config, sim_data)
@@ -146,7 +151,15 @@ class Visualizer:
             else f"y_ra_dec_zoom_{filename_suffix}"
         )
 
-        self._plot_gnomview(y_map, (ra_deg, dec_deg), config, suffix, sim_data)
+        self._plot_gnomview(
+            y_map,
+            (ra_deg, dec_deg),
+            config,
+            suffix,
+            sim_data,
+            zoom_scale=zoom_scale,
+            show_halo_centers=show_halo_centers,
+        )
 
     @time_calls
     def plot_Y_vs_M(
@@ -222,26 +235,49 @@ class Visualizer:
         print(f"  Intercept = {intercept:.3f}")
 
     @time_calls
-    def plot_Y_vs_R200(self, radial_profiles: Iterable[RadialProfile]):
+    def plot_Y_vs_R200(self, radial_profiles: Iterable[RadialProfile], suffix: str = "y_vs_r200"):
+        def _fmt_1sf(value: float) -> str:
+            exponent = int(np.floor(np.log10(value)))
+            mantissa = int(np.round(value / (10**exponent)))
+            if mantissa == 10:
+                mantissa = 1
+                exponent += 1
+            return rf"{mantissa}\times10^{{{exponent}}}"
+
+        def _mass_bin_label(logm_center: float, halfwidth: float = 0.15) -> str:
+            m_lo = 10 ** (logm_center - halfwidth)
+            m_hi = 10 ** (logm_center + halfwidth)
+            lo_tex = _fmt_1sf(m_lo)
+            hi_tex = _fmt_1sf(m_hi)
+            return rf"${lo_tex} < M_{{200c}} < {hi_tex}\,M_\odot$"
+
+        radial_profiles = list(radial_profiles)
         _, ax = plt.subplots(figsize=(8, 6))
 
+        common_good = np.ones_like(radial_profiles[0].x_centers, dtype=bool)
         for profile in radial_profiles:
-            good = (
+            common_good &= (
                 np.isfinite(profile.x_centers)
                 & np.isfinite(profile.y_mean)
                 & (profile.y_mean > 0)
             )
-            label_mass = f"logM={profile.logM_center:.1f}"
-            err = ax.errorbar(
-                profile.x_centers[good],
-                profile.y_mean[good],
-                yerr=profile.y_err[good],
-                fmt="o",
+
+        for profile in radial_profiles:
+            good = common_good
+            x = profile.x_centers[good]
+            y = profile.y_mean[good]
+            yerr = profile.y_err[good]
+            (line,) = ax.plot(
+                x,
+                y,
+                "o",
                 ms=4,
-                capsize=2,
-                label=f"Mean at {label_mass} (N={profile.num_samples})",
+                label=_mass_bin_label(profile.logM_center),
             )
-            line_color = err.lines[0].get_color() if err.lines else None
+            line_color = line.get_color()
+            y_lo = np.maximum(y - yerr, 1e-20)
+            y_hi = y + yerr
+            ax.fill_between(x, y_lo, y_hi, color=line_color, alpha=0.15, linewidth=0)
 
             ref_good = np.isfinite(profile.y_battaglia) & (profile.y_battaglia > 0)
             ax.plot(
@@ -265,7 +301,7 @@ class Visualizer:
         ax.grid(alpha=0.3)
         ax.tick_params(axis="both", which="major", labelsize=13)
         ax.legend(fontsize=10)
-        self.finalize_plot("y_vs_r200")
+        self.finalize_plot(suffix)
 
     @time_calls
     def visualize_y_map(self, y_map: np.ndarray):

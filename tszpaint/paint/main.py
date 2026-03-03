@@ -48,7 +48,7 @@ def main():
         JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
         date_dir = datetime.now().strftime("%Y-%m-%d")
         output_dir = DATA_PATH / "visualization" / date_dir
-        output_file = output_dir / "4r98-total.asdf"
+        output_file = output_dir / "triaxial_small_mass.asdf"
 
         logger.info("Painting Abacus tSZ map...")
         logger.info(f"Halo directory: {halo_dir}")

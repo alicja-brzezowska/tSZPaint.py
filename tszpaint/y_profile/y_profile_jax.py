@@ -50,8 +50,8 @@ def get_gnfw_params(mass: float, redshift: float):
 
     # From Battaglia et al. 2016
     P0 = A_P0_prior * m**0.154 * z1 ** (-0.758)
-    xc = A_xc * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
-    beta = A_beta * m**0.0393 * z1**0.415
+    xc = A_xc_sim * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
+    beta = A_beta_sim * m**0.0393 * z1**0.415
     alpha = 1.0
     gamma = -0.3
     beta = gamma - alpha * beta  # Sigurd's conversion from Battaglia to standard NFW

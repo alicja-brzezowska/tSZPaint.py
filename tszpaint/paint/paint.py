@@ -37,6 +37,30 @@ def load_interpolator(path: Path = JAX_PATH):
     return BattagliaLogInterpolator.from_pickle(path)
 
 
+def get_real_space_from_eigenvals(
+    eigenvalues: np.ndarray,
+    r98: np.ndarray,
+) -> np.ndarray:
+    """Convert inertia eigenvalues to real-space semi-axis lengths a>=b>=c.
+
+    Assumes eigenvalues are sorted largest->smallest (inertia ordering).
+    Uses volume-preserving normalization abc = r98^3.
+    """
+    eps = np.finfo(np.float64).tiny
+    eigenvalues = np.maximum(np.asarray(eigenvalues, dtype=np.float64), eps)
+    r98 = np.asarray(r98, dtype=np.float64)
+
+    ratio_ba = np.sqrt(eigenvalues[:, 2] / eigenvalues[:, 1])
+    ratio_ca = np.sqrt(eigenvalues[:, 2] / eigenvalues[:, 0])
+
+    a = r98 / np.cbrt(ratio_ba * ratio_ca)
+    b = ratio_ba * a
+    c = ratio_ca * a
+    return np.stack([a, b, c], axis=1)
+
+
+
+
 @memory_usage
 @array_size
 @time_calls
@@ -65,30 +89,43 @@ def paint_y(
 
     halo_xyz = convert_rad_to_cart(data.theta, data.phi)
 
-    r_90_phys = get_angular_size_from_comoving(MODEL, data.radii_halos, data.redshift)
-    r_search = r_90_phys * config.search_radius
-    pix_in_halos, distances, halo_starts, halo_counts, halo_indices = (
-        find_pixels_in_halos(config.nside, halo_xyz, r_search, n_workers=8)
+    semi_axes_comoving = get_real_space_from_eigenvals(
+        data.eigenvalues,
+        data.radii_halos,
+    )
+    semi_axes_angular = get_angular_size_from_comoving(
+        MODEL, semi_axes_comoving, data.redshift
+    )
+    semi_axes_angular *= config.search_radius
+
+    pix_in_halos, zeta, halo_starts, halo_counts, halo_indices, projected_r_eff_2d = (
+        find_pixels_in_halos(
+            config.nside,
+            halo_xyz,
+            semi_axes_angular,
+            data.eigenvectors,
+            n_workers=8,
+        )
     )
 
-    logger.info(
-        f"r_90 stats: min={r_90_phys.min():.3e}, median={np.median(r_90_phys):.3e}, max={r_90_phys.max():.3e}"
-    )
+    r_search = projected_r_eff_2d
+    r_90_equiv = r_search / config.search_radius
+
     logger.info(
         f"r_search stats: min={r_search.min():.3e}, median={np.median(r_search):.3e}, max={r_search.max():.3e}"
     )
     logger.info(f"pixel-halo pairs: {len(pix_in_halos):,}")
-    logger.info(f"distances bytes: {distances.nbytes / 1e9:.2f} GB")
-    logger.info(f"weights expected bytes (float64): {len(distances) * 8 / 1e9:.2f} GB")
+    logger.info(f"zeta bytes: {zeta.nbytes / 1e9:.2f} GB")
+    logger.info(f"weights expected bytes (float64): {len(zeta) * 8 / 1e9:.2f} GB")
 
     if use_weights:
         weights = compute_weights(
             config,
             pixel_indices=pix_in_halos,
-            distances=distances,
+            distances=zeta,
             halo_starts=halo_starts,
             halo_counts=halo_counts,
-            r_90=r_90_phys,
+            r_90=r_90_equiv,
             particle_counts=data.particle_counts,
             method="vectorized",
         )
@@ -96,16 +133,17 @@ def paint_y(
         weights = np.ones(len(pix_in_halos), dtype=np.float64)
 
     log_M = np.log10(data.m_halos)
-    log_distances = np.log(distances + 1e-40)
+    log_distances = np.log(zeta + 1e-40)
 
-    logger.info(
-        f"""log_distances stats: min={log_distances.min():.3e}, \n
+    if len(log_distances) > 0:
+        logger.info(
+            f"""log_distances stats: min={log_distances.min():.3e}, \n
         median={np.median(log_distances):.3e}, max={log_distances.max():.3e}"""
-    )
+        )
 
     # Create halo index array to map each pixel to its halo's mass
     log_M_values = log_M[halo_indices]
-    z_values = np.full_like(distances, z, dtype=np.float32)
+    z_values = np.full_like(zeta, data.redshift, dtype=np.float32)
 
     y_values = interpolator.eval_for_logs(log_distances, z_values, log_M_values)  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
 
@@ -121,8 +159,8 @@ def paint_y(
     # for plotting y vs r/r200
     profile_n_halos = 1000
     profile_seed = 123
-    profile_logM_centers = [12.7, 13.0, 13.7, 14.0, 14.7, 15.0]
-    profile_logM_halfwidth = 0.2
+    profile_logM_centers = [12, 12.5, 13, 13.5, 14, 14.5]
+    profile_logM_halfwidth = 0.15
 
     radial_cfg = RadialProfileBuilderConfig(
         r_search=r_search,
@@ -131,17 +169,21 @@ def paint_y(
         log_m_centers=profile_logM_centers,
         log_m_halfwidth=profile_logM_halfwidth,
     )
-    radial_profiles = RadialProfileBuilder(
+    builder = RadialProfileBuilder(
         radial_cfg,
         data,
+        pix_in_halos,
         halo_starts,
         halo_counts,
-        distances,
+        zeta,
         interpolator,
         MODEL,
-    ).build(y_map)
+        y_values=y_values,
+    )
+    radial_profiles = builder.build(y_map)
+    radial_profiles_isolated = builder.build_isolated()
 
-    return y_map, y_per_halo, radial_profiles
+    return y_map, y_per_halo, radial_profiles, radial_profiles_isolated
 
 
 def display_map_statistics(y_map: np.ndarray):
@@ -150,6 +192,7 @@ def display_map_statistics(y_map: np.ndarray):
     logger.info(f"  Max: {y_map.max():.3e}")
     logger.info(f"  Mean: {y_map.mean():.3e}")
     logger.info(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
+
 
 
 def paint_abacus(
@@ -189,7 +232,7 @@ def paint_and_visualize(
     use_weights: bool = True,
 ):
     interpolator = load_interpolator(interpolator_path)
-    y_map, y_per_halo, radial_profile = paint_y(
+    y_map, y_per_halo, radial_profile, radial_profile_isolated = paint_y(
         config,
         data,
         interpolator=interpolator,
@@ -200,6 +243,9 @@ def paint_and_visualize(
     if output_file:
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.exists() or output_path.is_symlink():
+            logger.warning(f"Output file exists, overwriting: {output_path}")
+            output_path.unlink()
         halo_index = np.arange(len(data.m_halos), dtype=np.int64)
         af = asdf.AsdfFile(
             {
@@ -224,7 +270,8 @@ def paint_and_visualize(
                     "y_per_halo": y_per_halo,
                     "halo_M": data.m_halos,
                     "r98_halo": data.radii_halos,
-                    "radial_profile": radial_profile,
+                    "radial_profile": [rp.as_dict() for rp in radial_profile],
+                    "radial_profile_isolated": [rp.as_dict() for rp in radial_profile_isolated],
                 },
             }
         )
@@ -234,7 +281,24 @@ def paint_and_visualize(
         output_stub = str(output_path.with_suffix(""))
 
     vis = Visualizer(config.nside, output_stub)
-    vis.plot_ra_dec(y_map, PlotConfig.standard(), sim_data=data)
+    vis.plot_ra_dec(
+        y_map,
+        PlotConfig.standard(),
+        sim_data=data,
+        filename_suffix="clean_tight",
+        zoom_scale=12.0,
+        show_halo_centers=False,
+    )
+    vis.plot_ra_dec(
+        y_map,
+        PlotConfig.standard(),
+        sim_data=data,
+        filename_suffix="clean_tight_x2",
+        zoom_scale=24.0,
+        show_halo_centers=False,
+    )
+
     vis.plot_Y_vs_M(data, y_per_halo)
-    vis.plot_Y_vs_R200(radial_profile)
+    vis.plot_Y_vs_R200(radial_profile_isolated)
+    vis.plot_Y_vs_R200(radial_profile, suffix="y_vs_r200_after_painting")
     # vis.visualize_y_map(y_map)

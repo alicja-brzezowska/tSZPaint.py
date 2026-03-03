@@ -59,6 +59,10 @@ class MockDataGenerator:
     def generate_simulation_data(self):
         theta, phi, m_halos, radii = self.create_mock_halo_catalogs()
         particle_counts = self.generate_mock_particle_counts()
+        # Spherical mock halos: equal semi-axes along each eigenvector
+        eigenvalues = np.tile(radii[:, np.newaxis], (1, 3))
+        eigenvectors = np.tile(np.eye(3), (self.n_halos, 1, 1))
         return SimulationData(
-            theta, phi, m_halos, particle_counts, self.redshift, radii
+            theta, phi, m_halos, particle_counts, self.redshift, radii,
+            eigenvalues, eigenvectors,
         )
