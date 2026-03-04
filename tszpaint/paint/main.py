@@ -3,8 +3,8 @@ from datetime import datetime
 from loguru import logger
 
 from tszpaint.config import (
-    DATA_PATH,
     HALO_CATALOGS_PATH,
+    OUTPUT_PATH,
     HEALCOUNTS_PATH,
     HEALCOUNTS_TOTAL_PATH,
     INTERPOLATORS_PATH,
@@ -47,8 +47,8 @@ def main():
         )
         JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
         date_dir = datetime.now().strftime("%Y-%m-%d")
-        output_dir = DATA_PATH / "visualization" / date_dir
-        output_file = output_dir / "triaxial_small_mass.asdf"
+        output_dir = OUTPUT_PATH / "visualization" / date_dir
+        output_file = output_dir / "logM_11.5_just_map.asdf"
 
         logger.info("Painting Abacus tSZ map...")
         logger.info(f"Halo directory: {halo_dir}")

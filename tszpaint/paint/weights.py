@@ -11,7 +11,7 @@ from tszpaint.paint.config import PainterConfig
 def _fast_init_weights(
     particle_counts: np.ndarray, pixel_indices: np.ndarray
 ) -> np.ndarray:
-    init_weights = np.empty(len(pixel_indices), dtype=np.float64)
+    init_weights = np.empty(len(pixel_indices), dtype=np.float32)
     for i in prange(len(pixel_indices)):
         idx = pixel_indices[i]
         count = particle_counts[idx]
@@ -36,7 +36,7 @@ def weights_mechanism(
     """Compute normalized weights for each particle contribution within halos."""
 
     N_halos = len(r_90)
-    weights = np.ones_like(distances, dtype=np.float64)
+    weights = np.ones_like(distances, dtype=np.float32)
 
     for h in prange(N_halos):
         start = halo_starts[h]
@@ -57,20 +57,20 @@ def weights_mechanism(
         bin_ids = np.minimum(bin_ids, n_bins_h - 1)
 
         # Count total pixels and non-empty pixels per bin
-        bin_pixel_tot = np.zeros(n_bins_h, dtype=np.float64)
-        bin_weight_tot = np.zeros(n_bins_h, dtype=np.float64)
+        bin_pixel_tot = np.zeros(n_bins_h, dtype=np.float32)
+        bin_weight_tot = np.zeros(n_bins_h, dtype=np.float32)
         for i in range(count):
             b = bin_ids[i]
             bin_pixel_tot[b] += 1.0
             bin_weight_tot[b] += w[i]
 
-        normalization_per_bin = np.ones(n_bins_h, dtype=np.float64)
+        normalization_per_bin = np.ones(n_bins_h, dtype=np.float32)
         for b in range(n_bins_h):
             if bin_pixel_tot[b] > 0.0:
                 normalization_per_bin[b] = bin_pixel_tot[b] / bin_weight_tot[b]
 
         # Apply: for sparse bins, w*1.0 still uses init_weights, so override to uniform
-        result = np.ones(count, dtype=np.float64)
+        result = np.ones(count, dtype=np.float32)
         for i in range(count):
             b = bin_ids[i]
             result[i] = w[i] * normalization_per_bin[b]

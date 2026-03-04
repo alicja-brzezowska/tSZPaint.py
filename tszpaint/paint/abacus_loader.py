@@ -80,7 +80,7 @@ def load_abacus_halos(
         m_halos = num_particles.astype(np.float64) * particle_mass
 
         # most signal from larger halos (Battaglia 2012)
-        logm_threshold = 11.7
+        logm_threshold = 11.5
         threshold = 10**logm_threshold
         cut = m_halos > threshold
 

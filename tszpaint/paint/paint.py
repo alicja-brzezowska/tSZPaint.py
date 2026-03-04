@@ -16,12 +16,12 @@ from tszpaint.logging import array_size, memory_usage, time_calls, trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.pixel_search import find_pixels_in_halos
-from tszpaint.paint.visualize import PlotConfig, Visualizer
+# from tszpaint.paint.visualize import PlotConfig, Visualizer
 from tszpaint.paint.weights import compute_weights
-from tszpaint.scripts.radial_profile import (
-    RadialProfileBuilder,
-    RadialProfileBuilderConfig,
-)
+# from tszpaint.scripts.radial_profile import (
+#     RadialProfileBuilder,
+#     RadialProfileBuilderConfig,
+# )
 from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.y_profile.y_profile import (
     create_battaglia_profile,
@@ -46,9 +46,9 @@ def get_real_space_from_eigenvals(
     Assumes eigenvalues are sorted largest->smallest (inertia ordering).
     Uses volume-preserving normalization abc = r98^3.
     """
-    eps = np.finfo(np.float64).tiny
-    eigenvalues = np.maximum(np.asarray(eigenvalues, dtype=np.float64), eps)
-    r98 = np.asarray(r98, dtype=np.float64)
+    eps = np.finfo(np.float32).tiny
+    eigenvalues = np.maximum(np.asarray(eigenvalues, dtype=np.float32), eps)
+    r98 = np.asarray(r98, dtype=np.float32)
 
     ratio_ba = np.sqrt(eigenvalues[:, 2] / eigenvalues[:, 1])
     ratio_ca = np.sqrt(eigenvalues[:, 2] / eigenvalues[:, 0])
@@ -95,7 +95,7 @@ def paint_y(
             data.radii_halos,
         )
     else:
-        spherical_r_comoving = np.asarray(data.radii_halos, dtype=np.float64)
+        spherical_r_comoving = np.asarray(data.radii_halos, dtype=np.float32)
         semi_axes_comoving = np.repeat(spherical_r_comoving[:, None], 3, axis=1)
 
     semi_axes_angular = get_angular_size_from_comoving(
@@ -136,7 +136,7 @@ def paint_y(
             method="vectorized",
         )
     else:
-        weights = np.ones(len(pix_in_halos), dtype=np.float64)
+        weights = np.ones(len(pix_in_halos), dtype=np.float32)
 
     log_M = np.log10(data.m_halos)
     log_distances = np.log(zeta + 1e-40)
@@ -158,38 +158,38 @@ def paint_y(
     y_map = np.zeros(hp.nside2npix(config.nside), dtype=np.float32)
     np.add.at(y_map, pix_in_halos, y_values)
 
-    y_per_halo = np.bincount(
-        halo_indices, weights=y_values, minlength=len(data.m_halos)
-    )
+    # y_per_halo = np.bincount(
+    #     halo_indices, weights=y_values, minlength=len(data.m_halos)
+    # ).astype(np.float32)
 
-    # for plotting y vs r/r200
-    profile_n_halos = 1000
-    profile_seed = 123
-    profile_logM_centers = [12, 12.5, 13, 13.5, 14, 14.5]
-    profile_logM_halfwidth = 0.15
+    # # for plotting y vs r/r200
+    # profile_n_halos = 1000
+    # profile_seed = 123
+    # profile_logM_centers = [12, 12.5, 13, 13.5, 14, 14.5]
+    # profile_logM_halfwidth = 0.15
 
-    radial_cfg = RadialProfileBuilderConfig(
-        r_search=r_search,
-        num_halos=profile_n_halos,
-        seed=profile_seed,
-        log_m_centers=profile_logM_centers,
-        log_m_halfwidth=profile_logM_halfwidth,
-    )
-    builder = RadialProfileBuilder(
-        radial_cfg,
-        data,
-        pix_in_halos,
-        halo_starts,
-        halo_counts,
-        zeta,
-        interpolator,
-        MODEL,
-        y_values=y_values,
-    )
-    radial_profiles = builder.build(y_map)
-    radial_profiles_isolated = builder.build_isolated()
+    # radial_cfg = RadialProfileBuilderConfig(
+    #     r_search=r_search,
+    #     num_halos=profile_n_halos,
+    #     seed=profile_seed,
+    #     log_m_centers=profile_logM_centers,
+    #     log_m_halfwidth=profile_logM_halfwidth,
+    # )
+    # builder = RadialProfileBuilder(
+    #     radial_cfg,
+    #     data,
+    #     pix_in_halos,
+    #     halo_starts,
+    #     halo_counts,
+    #     zeta,
+    #     interpolator,
+    #     MODEL,
+    #     y_values=y_values,
+    # )
+    # radial_profiles = builder.build(y_map)
+    # radial_profiles_isolated = builder.build_isolated()
 
-    return y_map, y_per_halo, radial_profiles, radial_profiles_isolated
+    return y_map  # , y_per_halo, radial_profiles, radial_profiles_isolated
 
 
 def display_map_statistics(y_map: np.ndarray):
@@ -238,21 +238,19 @@ def paint_and_visualize(
     use_weights: bool = True,
 ):
     interpolator = load_interpolator(interpolator_path)
-    y_map, y_per_halo, radial_profile, radial_profile_isolated = paint_y(
+    y_map = paint_y(
         config,
         data,
         interpolator=interpolator,
         use_weights=use_weights,
     )
     display_map_statistics(y_map)
-    output_stub = None
     if output_file:
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_path.exists() or output_path.is_symlink():
             logger.warning(f"Output file exists, overwriting: {output_path}")
             output_path.unlink()
-        halo_index = np.arange(len(data.m_halos), dtype=np.int64)
         af = asdf.AsdfFile(
             {
                 "header": {
@@ -271,41 +269,25 @@ def paint_and_visualize(
                 },
                 "data": {
                     "y_map": y_map,
-                    "halo_index": halo_index,
-                    "theta_halo": data.theta,
-                    "phi_halo": data.phi,
-                    "y_per_halo": y_per_halo,
-                    "halo_M": data.m_halos,
-                    "r98_halo": data.radii_halos,
-                    "radial_profile": [rp.as_dict() for rp in radial_profile],
-                    "radial_profile_isolated": [rp.as_dict() for rp in radial_profile_isolated],
+                    # "halo_index": np.arange(len(data.m_halos), dtype=np.int64),
+                    # "theta_halo": data.theta,
+                    # "phi_halo": data.phi,
+                    # "y_per_halo": y_per_halo,
+                    # "halo_M": data.m_halos,
+                    # "r98_halo": data.radii_halos,
+                    # "radial_profile": [rp.as_dict() for rp in radial_profile],
+                    # "radial_profile_isolated": [rp.as_dict() for rp in radial_profile_isolated],
                 },
             }
         )
         af.write_to(output_path)
-
         logger.info(f"Saved to {output_path}")
-        output_stub = str(output_path.with_suffix(""))
 
-    vis = Visualizer(config.nside, output_stub)
-    vis.plot_ra_dec(
-        y_map,
-        PlotConfig.standard(),
-        sim_data=data,
-        filename_suffix="clean_tight",
-        zoom_scale=12.0,
-        show_halo_centers=False,
-    )
-    vis.plot_ra_dec(
-        y_map,
-        PlotConfig.standard(),
-        sim_data=data,
-        filename_suffix="clean_tight_x2",
-        zoom_scale=24.0,
-        show_halo_centers=False,
-    )
-
-    vis.plot_Y_vs_M(data, y_per_halo)
-    vis.plot_Y_vs_R200(radial_profile_isolated)
-    vis.plot_Y_vs_R200(radial_profile, suffix="y_vs_r200_after_painting")
+    # output_stub = str(Path(output_file).with_suffix("")) if output_file else None
+    # vis = Visualizer(config.nside, output_stub)
+    # vis.plot_ra_dec(y_map, PlotConfig.standard(), sim_data=data, filename_suffix="clean_tight", zoom_scale=12.0, show_halo_centers=False)
+    # vis.plot_ra_dec(y_map, PlotConfig.standard(), sim_data=data, filename_suffix="clean_tight_x2", zoom_scale=24.0, show_halo_centers=False)
+    # vis.plot_Y_vs_M(data, y_per_halo)
+    # vis.plot_Y_vs_R200(radial_profile_isolated)
+    # vis.plot_Y_vs_R200(radial_profile, suffix="y_vs_r200_after_painting")
     # vis.visualize_y_map(y_map)

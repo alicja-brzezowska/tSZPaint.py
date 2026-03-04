@@ -31,9 +31,9 @@ def find_pixels_in_halos(
 
     def tangent_basis(n0: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """For the vector n0, define a tangent cartesian basis (t1,t2)"""
-        ref = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        ref = np.array([0.0, 0.0, 1.0], dtype=np.float32)
         if abs(np.dot(n0, ref)) > 0.99:
-            ref = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+            ref = np.array([0.0, 1.0, 0.0], dtype=np.float32)
         # define two orthonormal vectors t1 and t2 to n0 
         t1 = np.cross(ref, n0)
         t1 /= np.linalg.norm(t1)
@@ -46,30 +46,10 @@ def find_pixels_in_halos(
         evecs = eigenvectors[i]
         n0 = halo_xyz[i]
 
-        if geometry == "spherical":
-            r_eff_2d = float(np.maximum(evals[0], np.finfo(np.float64).tiny))
-            pixels = hp.query_disc(
-                nside=nside,
-                vec=n0,
-                radius=r_eff_2d,
-                nest=nest,
-                inclusive=True,
-            )
-
-            if len(pixels) == 0:
-                return i, np.array([], dtype=np.int64), np.array([]), r_eff_2d
-
-            x, y, z = hp.pix2vec(nside, pixels, nest=nest)
-            pixel_xyz = np.stack([x, y, z], axis=1)
-            cosang = np.clip(pixel_xyz @ n0, -1.0, 1.0)
-            distances = np.arccos(cosang)
-
-            return i, pixels, distances, r_eff_2d
-
         # normalization 
-        e_a = evecs[2] / np.linalg.norm(evecs[2])
+        e_a = evecs[0] / np.linalg.norm(evecs[0])
         e_b = evecs[1] / np.linalg.norm(evecs[1])
-        e_c = evecs[0] / np.linalg.norm(evecs[0])
+        e_c = evecs[2] / np.linalg.norm(evecs[2])
 
         # matrix Q of the ellipsoid in 3D space: x^T Q x = 1 
         inv_a2 = 1.0 / (evals[0] * evals[0])
@@ -88,15 +68,13 @@ def find_pixels_in_halos(
         S22 = t2 @ Q @ t2
 
         # 2D ellipse matrix; solve for the eigenvalues 
-        S = np.array([[S11, S12], [S12, S22]], dtype=np.float64)
+        S = np.array([[S11, S12], [S12, S22]], dtype=np.float32)
         s_eigs = np.linalg.eigvalsh(S)
-        a_proj = 1.0 / np.sqrt(max(s_eigs[0], np.finfo(np.float64).tiny))
-        c_proj = 1.0 / np.sqrt(max(s_eigs[1], np.finfo(np.float64).tiny))
-        # effective radius
-        r_eff_2d = np.sqrt(a_proj * c_proj) # A = pi * a_proj * c_proj
+        a_proj = 1.0 / np.sqrt(max(s_eigs[0], np.finfo(np.float32).tiny))
+        c_proj = 1.0 / np.sqrt(max(s_eigs[1], np.finfo(np.float32).tiny))
 
         # initial query to the major projected axis
-        query_radius = a_proj
+        query_radius = max(a_proj, c_proj)
         pixels = hp.query_disc(
             nside=nside,
             vec=n0,
@@ -106,7 +84,7 @@ def find_pixels_in_halos(
         )
 
         if len(pixels) == 0:
-            return i, np.array([], dtype=np.int64), np.array([]), r_eff_2d
+            return i, np.array([], dtype=np.int64), np.array([]), query_radius
 
         x, y, z = hp.pix2vec(nside, pixels, nest=nest)
         pixel_xyz = np.stack([x, y, z], axis=1)
@@ -119,17 +97,18 @@ def find_pixels_in_halos(
 
         pixels = pixels[mask]
         if len(pixels) == 0:
-            return i, np.array([], dtype=np.int64), np.array([]), r_eff_2d
+            return i, np.array([], dtype=np.int64), np.array([]), query_radius
 
-        val = np.maximum(val[mask], 0.0)
-        distances = r_eff_2d * np.sqrt(val)
+        # Compute angular distances from halo center
+        cosang = np.clip(pixel_xyz[mask] @ n0, -1.0, 1.0)
+        distances = np.arccos(cosang)
 
-        return i, pixels, distances, r_eff_2d
+        return i, pixels, distances, query_radius
 
     with timer(f"Parallel queries ({n_workers} workers)"):
         results = [None] * n_halos
 
-        halo_effective_radius = np.zeros(n_halos, dtype=np.float64)
+        halo_effective_radius = np.zeros(n_halos, dtype=np.float32)
 
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
             futures = {executor.submit(query_single_halo, i): i for i in range(n_halos)}
@@ -154,7 +133,7 @@ def find_pixels_in_halos(
         pixel_indices = (
             np.concatenate(all_pixels) if all_pixels else np.array([], dtype=np.int64)
         )
-        distances = np.concatenate(all_distances) if all_distances else np.array([])
+        distances = np.concatenate(all_distances).astype(np.float32) if all_distances else np.array([], dtype=np.float32)
 
         halo_starts = np.zeros(n_halos, dtype=np.int64)
         halo_starts[1:] = np.cumsum(halo_counts[:-1])
