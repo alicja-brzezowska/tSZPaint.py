@@ -1,5 +1,6 @@
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Literal
 
 import healpy as hp
 import numpy as np
@@ -18,6 +19,7 @@ def find_pixels_in_halos(
     eigenvectors: np.ndarray,
     nest: bool = True,
     n_workers: int | None = None,
+    geometry: Literal["triaxial", "spherical"] = "triaxial",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Find halo pixels and return effective projected radius per halo-pixel pair.
     """
@@ -43,6 +45,26 @@ def find_pixels_in_halos(
         evals = eigenvalues[i]
         evecs = eigenvectors[i]
         n0 = halo_xyz[i]
+
+        if geometry == "spherical":
+            r_eff_2d = float(np.maximum(evals[0], np.finfo(np.float64).tiny))
+            pixels = hp.query_disc(
+                nside=nside,
+                vec=n0,
+                radius=r_eff_2d,
+                nest=nest,
+                inclusive=True,
+            )
+
+            if len(pixels) == 0:
+                return i, np.array([], dtype=np.int64), np.array([]), r_eff_2d
+
+            x, y, z = hp.pix2vec(nside, pixels, nest=nest)
+            pixel_xyz = np.stack([x, y, z], axis=1)
+            cosang = np.clip(pixel_xyz @ n0, -1.0, 1.0)
+            distances = np.arccos(cosang)
+
+            return i, pixels, distances, r_eff_2d
 
         # normalization 
         e_a = evecs[2] / np.linalg.norm(evecs[2])

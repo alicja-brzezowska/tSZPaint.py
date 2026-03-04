@@ -89,10 +89,15 @@ def paint_y(
 
     halo_xyz = convert_rad_to_cart(data.theta, data.phi)
 
-    semi_axes_comoving = get_real_space_from_eigenvals(
-        data.eigenvalues,
-        data.radii_halos,
-    )
+    if config.halo_geometry == "triaxial":
+        semi_axes_comoving = get_real_space_from_eigenvals(
+            data.eigenvalues,
+            data.radii_halos,
+        )
+    else:
+        spherical_r_comoving = np.asarray(data.radii_halos, dtype=np.float64)
+        semi_axes_comoving = np.repeat(spherical_r_comoving[:, None], 3, axis=1)
+
     semi_axes_angular = get_angular_size_from_comoving(
         MODEL, semi_axes_comoving, data.redshift
     )
@@ -105,6 +110,7 @@ def paint_y(
             semi_axes_angular,
             data.eigenvectors,
             n_workers=8,
+            geometry=config.halo_geometry,
         )
     )
 
@@ -255,6 +261,7 @@ def paint_and_visualize(
                     "redshift": data.redshift,
                     "search_radius_multiplier": config.search_radius,
                     "bin_width": config.weight_bin_width,
+                    "halo_geometry": config.halo_geometry,
                     "healpix_file": str(healcounts_file_1)
                     if healcounts_file_1 is not None
                     else None,

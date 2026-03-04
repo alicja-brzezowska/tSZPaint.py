@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
@@ -8,3 +9,4 @@ class PainterConfig:
         4  # Battaglia (2012) found that most tSZ signal is within 4*R_{200}critical so also around 4*R_{98} 
     )
     weight_bin_width: float = 2e-5  # typical halo has r_90 of 4.183e-04: 5% of that
+    halo_geometry: Literal["triaxial", "spherical"] = "triaxial"
