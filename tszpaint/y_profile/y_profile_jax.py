@@ -2,12 +2,12 @@ import pickle
 from pathlib import Path
 from time import perf_counter
 
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import unxt as u
 from jax.typing import ArrayLike
+from loguru import logger
 from quadax import quadts  # jax friendly quadrature integration
 from wcosmo import comoving_distance, efunc  # jax friendly atropy.cosmology
 from wcosmo.utils import (
@@ -15,6 +15,7 @@ from wcosmo.utils import (
 )  # wcosmo objects have defaults units; disable as jax arrays don't support units
 
 import tszpaint.constants as const
+from tszpaint.conf.config_schema import YProfileConfig
 
 jax.config.update("jax_enable_x64", False)  # make float 64
 disable_units()
@@ -180,6 +181,7 @@ def measure_y_values(
 
 
 def dump_to_file(
+    conf: YProfileConfig,
     log_thetas: ArrayLike,
     redshifts: ArrayLike,
     log_masses: ArrayLike,
@@ -192,7 +194,7 @@ def dump_to_file(
     redshifts_np = np.asarray(redshifts)
     log_masses_np = np.asarray(log_masses)
 
-    with open(FILE, "wb") as f:
+    with open(conf.output_file_path, "wb") as f:
         pickle.dump(
             {
                 "log_thetas": log_thetas_np,
@@ -204,5 +206,7 @@ def dump_to_file(
         )
 
 
-if __name__ == "__main__":
-    dump_to_file(*measure_y_values())
+def run_y_profile(conf: YProfileConfig):
+    logger.info(f"Running y_profile with config {conf}")
+    y_values = measure_y_values()
+    dump_to_file(conf, *y_values)

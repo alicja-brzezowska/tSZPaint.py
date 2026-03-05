@@ -1,0 +1,14 @@
+defaults:
+  - infra: slurm
+  - _self_
+
+alpha: 0.5
+beta: 1
+gamma: 3
+
+hydra:
+  sweeper:
+    params:
+      alpha: range(0, 1, 0.1)
+      beta: 4,5,6
+      gamma: 7,8,9
