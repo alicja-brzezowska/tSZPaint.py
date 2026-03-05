@@ -16,6 +16,7 @@ from wcosmo.utils import (
 
 import tszpaint.constants as const
 from tszpaint.conf.config_schema import YProfileConfig
+from tszpaint.config import INTERPOLATORS_PATH
 
 jax.config.update("jax_enable_x64", False)  # make float 64
 disable_units()
@@ -33,27 +34,23 @@ RTOL = 1e-3  # saw that this was sufficient in tests, can change
 uniform_scale = jnp.linspace(0.5, 1.5, 5)  # 125 points
 
 
-# from Pandey 2023:
-#A_P0_prior = jnp.linspace(2, 40, 5)
-#A_xc_prior = jnp.linspace(0.3, 0.7, 5)
+def output_file_path(conf: YProfileConfig):
+    return (
+        INTERPOLATORS_PATH
+        / f"alpha={conf.alpha}_beta_mul={conf.beta_mul}_gamma={conf.gamma}.pkl"
+    )
 
 
-# motivated by simulations: good estimates
-#A_xc_sim = 0.497 * uniform_scale
-#A_P0_sim = 18.1 * uniform_scale
-#A_beta_sim = 4.35 * uniform_scale
-
-
-def get_gnfw_params(mass: float, redshift: float):
+def get_gnfw_params(
+    alpha: float, beta_mul: float, gamma: float, mass: float, redshift: float
+):
     z1 = redshift + 1.0
     m = mass / 1e14
 
     # From Battaglia et al. 2016
     P0 = 18.1 * m**0.154 * z1 ** (-0.758)
     xc = 0.497 * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
-    beta = 4.35 * m**0.0393 * z1**0.415
-    alpha = 1.0
-    gamma = -0.3
+    beta = beta_mul * m**0.0393 * z1**0.415
     beta = gamma - alpha * beta  # Sigurd's conversion from Battaglia to standard gNFW
     # now P(x) = P0 / (x^gamma * (1+x^alpha)^((beta-gamma)/alpha)) where x=r/r_s and r_s=xc*R_200
     return xc, alpha, beta, gamma, P0
@@ -73,6 +70,9 @@ def y_value(
     H0_cgs: float,
     f_b: float,
     Om0: float,
+    alpha: float,
+    beta_mul: float,
+    gamma: float,
 ):
     theta = jnp.exp(log_theta)
     mass = 10**log_mass
@@ -86,7 +86,7 @@ def y_value(
     theta_200 = jnp.arctan(R_200 / d_A)
 
     x_sq = (theta / theta_200) ** 2
-    xc, alpha, beta, gamma, P0 = get_gnfw_params(mass, redshift)
+    xc, alpha, beta, gamma, P0 = get_gnfw_params(alpha, beta_mul, gamma, mass, redshift)
 
     def integrand(y):
         r_3d = jnp.sqrt(y**2 + x_sq)
@@ -115,6 +115,7 @@ DIM = 256
 
 
 def measure_y_values(
+    conf: YProfileConfig,
     Omega_c: float = 0.2589,
     Omega_b: float = 0.0486,
     h: float = 0.6774,
@@ -149,8 +150,13 @@ def measure_y_values(
     z_flat = z_grid.ravel()
     mass_flat = mass_grid.ravel()
 
-    vmap_all = jax.vmap(y_value, in_axes=[0, 0, 0, None, None, None, None])
-    vmap_all_jitted = jax.jit(vmap_all, static_argnames=("H0", "H0_cgs", "f_b", "Om0"))
+    vmap_all = jax.vmap(
+        y_value, in_axes=[0, 0, 0, None, None, None, None, None, None, None]
+    )
+    vmap_all_jitted = jax.jit(
+        vmap_all,
+        static_argnames=("H0", "H0_cgs", "f_b", "Om0", "alpha", "beta_mul", "gamma"),
+    )
 
     t = perf_counter()
     chunk_size = 65536  # tune based on RAM
@@ -164,16 +170,14 @@ def measure_y_values(
             H0_cgs_value,
             f_b,
             OmegaM,
+            conf.alpha,
+            conf.beta_mul,
+            conf.gamma,
         ).block_until_ready()
         results.append(y_chunk)
     y_flat = jnp.concatenate(results)
     print(f"Chunks of {chunk_size}: {perf_counter() - t} seconds")
     t = perf_counter()
-
-    # y_flat = vmap_all_jitted(
-    #     theta_flat, z_flat, mass_flat, H0_value, H0_cgs_value, f_b, OmegaM
-    # ).block_until_ready()
-    # print("No chunking:", perf_counter() - t)
 
     # Reshape back to grid
     y_grid = y_flat.reshape(theta_grid.shape)
@@ -187,14 +191,12 @@ def dump_to_file(
     log_masses: ArrayLike,
     y_grid: ArrayLike,
 ):
-    # TODO: save this instead
-    log_prof_y_np = np.asarray(jnp.log(y_grid + 1e-100))
     prof_y_np = np.asarray(y_grid)
     log_thetas_np = np.asarray(log_thetas)
     redshifts_np = np.asarray(redshifts)
     log_masses_np = np.asarray(log_masses)
 
-    with open(conf.output_file_path, "wb") as f:
+    with open(output_file_path(conf), "wb") as f:
         pickle.dump(
             {
                 "log_thetas": log_thetas_np,
@@ -208,5 +210,5 @@ def dump_to_file(
 
 def run_y_profile(conf: YProfileConfig):
     logger.info(f"Running y_profile with config {conf}")
-    y_values = measure_y_values()
+    y_values = measure_y_values(conf)
     dump_to_file(conf, *y_values)

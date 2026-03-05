@@ -1,10 +1,10 @@
 defaults:
-  - infra: slurm
+  - infra: local
   - _self_
 
-alpha: 0.5
-beta: 1
-gamma: 3
+alpha: 1.0
+beta_mul: 4.35
+gamma: -0.3
 
 hydra:
   sweeper:
