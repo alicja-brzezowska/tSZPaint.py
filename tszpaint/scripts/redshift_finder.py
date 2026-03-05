@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import asdf
-from config import DATA_PATH, HEALCOUNTS_PATH
+from tszpaint.config import DATA_PATH, HEALCOUNTS_TOTAL_PATH
 
 
 def obtain_healcount_redshift(filepath):
@@ -11,11 +11,11 @@ def obtain_healcount_redshift(filepath):
 
 def main():
     output_file = DATA_PATH / "healcount_redshifts.txt"
-    healcounts_dir = Path(HEALCOUNTS_PATH)
+    healcounts_dir = Path(HEALCOUNTS_TOTAL_PATH)
 
     with open(output_file, "w") as f:
         for healcount_file in sorted(
-            healcounts_dir.glob("LightCone0_halo_heal-counts_Step*.asdf")
+            healcounts_dir.glob("LightCone0_total_heal-counts_Step*.asdf")
         ):
             try:
                 redshift = obtain_healcount_redshift(healcount_file)

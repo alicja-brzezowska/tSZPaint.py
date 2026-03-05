@@ -98,8 +98,8 @@ def load_abacus_halos(
         r100_ref = np.asarray(e["r100_L2com"], dtype=np.float64)
 
         # triaxial halos
-        eigenvalues = np.asarray(e["sigmar_L2com_i16"], dtype=np.float64)
-        eigenvectors = np.asarray(e["sigmar_eigenvecs_L2com_u16"], dtype=np.float64)
+        eigenvalues = np.asarray(e["sigman_L2com_i16"], dtype=np.float64)
+        eigenvectors = np.asarray(e["sigman_eigenvecs_L2com_u16"], dtype=np.float64)
         # u16 is a smart custom encoding of the eigenvectors 
         sigmar_min, sigmar_mid, sigmar_maj = unpack_euler16(eigenvectors)
 

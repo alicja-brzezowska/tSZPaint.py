@@ -158,6 +158,7 @@ def paint_y(
     y_map = np.zeros(hp.nside2npix(config.nside), dtype=np.float32)
     np.add.at(y_map, pix_in_halos, y_values)
 
+
     # y_per_halo = np.bincount(
     #     halo_indices, weights=y_values, minlength=len(data.m_halos)
     # ).astype(np.float32)
