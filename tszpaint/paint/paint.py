@@ -1,4 +1,5 @@
 import os
+from glob import glob
 from pathlib import Path
 
 import asdf
@@ -16,8 +17,10 @@ from tszpaint.logging import array_size, memory_usage, time_calls, trace_calls
 from tszpaint.paint.abacus_loader import SimulationData, load_abacus_for_painting
 from tszpaint.paint.config import PainterConfig
 from tszpaint.paint.pixel_search import find_pixels_in_halos
+
 # from tszpaint.paint.visualize import PlotConfig, Visualizer
 from tszpaint.paint.weights import compute_weights
+
 # from tszpaint.scripts.radial_profile import (
 #     RadialProfileBuilder,
 #     RadialProfileBuilderConfig,
@@ -59,6 +62,12 @@ def get_real_space_from_eigenvals(
     return np.stack([a, b, c], axis=1)
 
 
+def load_all_interpolators():
+    interpolators: list[BattagliaLogInterpolator] = []
+    for f in glob(str(INTERPOLATORS_PATH / "*.pkl")):
+        logger.info(f"Loading interpolator from {f}")
+        interpolators.append(BattagliaLogInterpolator.from_pickle(Path(f)))
+    return interpolators
 
 
 @memory_usage
@@ -158,7 +167,6 @@ def paint_y(
     y_map = np.zeros(hp.nside2npix(config.nside), dtype=np.float32)
     np.add.at(y_map, pix_in_halos, y_values)
 
-
     # y_per_halo = np.bincount(
     #     halo_indices, weights=y_values, minlength=len(data.m_halos)
     # ).astype(np.float32)
@@ -199,7 +207,6 @@ def display_map_statistics(y_map: np.ndarray):
     logger.info(f"  Max: {y_map.max():.3e}")
     logger.info(f"  Mean: {y_map.mean():.3e}")
     logger.info(f"  Non-zero pixels: {np.sum(y_map > 0)}/{len(y_map)}")
-
 
 
 def paint_abacus(
