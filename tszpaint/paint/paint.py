@@ -63,10 +63,12 @@ def get_real_space_from_eigenvals(
 
 
 def load_all_interpolators():
-    interpolators: list[BattagliaLogInterpolator] = []
+    interpolators: dict[str, BattagliaLogInterpolator] = dict()
     for f in glob(str(INTERPOLATORS_PATH / "*.pkl")):
         logger.info(f"Loading interpolator from {f}")
-        interpolators.append(BattagliaLogInterpolator.from_pickle(Path(f)))
+
+        interpolators[f] = BattagliaLogInterpolator.from_pickle(Path(f))
+
     return interpolators
 
 
@@ -77,7 +79,7 @@ def load_all_interpolators():
 def paint_y(
     config: PainterConfig,
     data: SimulationData,
-    interpolator: BattagliaLogInterpolator,
+    interpolators: dict[str, BattagliaLogInterpolator],
     use_weights: bool = True,
 ):
     logger.info(
@@ -160,12 +162,13 @@ def paint_y(
     log_M_values = log_M[halo_indices]
     z_values = np.full_like(zeta, data.redshift, dtype=np.float32)
 
-    y_values = interpolator.eval_for_logs(log_distances, z_values, log_M_values)  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
-
-    y_values *= weights
-
-    y_map = np.zeros(hp.nside2npix(config.nside), dtype=np.float32)
-    np.add.at(y_map, pix_in_halos, y_values)
+    y_map_per_interpolator: dict[str, np.ndarray] = dict()
+    for filename, interpolator in interpolators:
+        y_values = interpolator.eval_for_logs(log_distances, z_values, log_M_values)  # pyright: ignore[reportUnknownVariableType, reportCallIssue]
+        y_values *= weights
+        y_map = np.zeros(hp.nside2npix(config.nside), dtype=np.float32)
+        np.add.at(y_map, pix_in_halos, y_values)
+        y_map_per_interpolator[filename] = y_map
 
     # y_per_halo = np.bincount(
     #     halo_indices, weights=y_values, minlength=len(data.m_halos)
@@ -198,7 +201,8 @@ def paint_y(
     # radial_profiles = builder.build(y_map)
     # radial_profiles_isolated = builder.build_isolated()
 
-    return y_map  # , y_per_halo, radial_profiles, radial_profiles_isolated
+    # return y_map  , y_per_halo, radial_profiles, radial_profiles_isolated
+    return y_map_per_interpolator
 
 
 def display_map_statistics(y_map: np.ndarray):
@@ -231,7 +235,6 @@ def paint_abacus(
         halo_dir,
         healcounts_file_1,
         output_file,
-        interpolator_path,
         use_weights,
     )
 
@@ -242,54 +245,59 @@ def paint_and_visualize(
     halo_dir: Path | None = None,
     healcounts_file_1: Path | None = None,
     output_file: str | None = None,
-    interpolator_path: Path = JAX_PATH,
     use_weights: bool = True,
 ):
-    interpolator = load_interpolator(interpolator_path)
-    y_map = paint_y(
+    interpolators = load_all_interpolators()
+    y_map_per_interpolator = paint_y(
         config,
         data,
-        interpolator=interpolator,
+        interpolators=interpolators,
         use_weights=use_weights,
     )
-    display_map_statistics(y_map)
-    if output_file:
-        output_path = Path(output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if output_path.exists() or output_path.is_symlink():
-            logger.warning(f"Output file exists, overwriting: {output_path}")
-            output_path.unlink()
-        af = asdf.AsdfFile(
-            {
-                "header": {
-                    "nside": config.nside,
-                    "nest": True,
-                    "redshift": data.redshift,
-                    "search_radius_multiplier": config.search_radius,
-                    "bin_width": config.weight_bin_width,
-                    "halo_geometry": config.halo_geometry,
-                    "healpix_file": str(healcounts_file_1)
-                    if healcounts_file_1 is not None
-                    else None,
-                    "halo_catalog_file": str(halo_dir)
-                    if halo_dir is not None
-                    else None,
-                },
-                "data": {
-                    "y_map": y_map,
-                    # "halo_index": np.arange(len(data.m_halos), dtype=np.int64),
-                    # "theta_halo": data.theta,
-                    # "phi_halo": data.phi,
-                    # "y_per_halo": y_per_halo,
-                    # "halo_M": data.m_halos,
-                    # "r98_halo": data.radii_halos,
-                    # "radial_profile": [rp.as_dict() for rp in radial_profile],
-                    # "radial_profile_isolated": [rp.as_dict() for rp in radial_profile_isolated],
-                },
-            }
-        )
-        af.write_to(output_path)
-        logger.info(f"Saved to {output_path}")
+    # display_map_statistics(y_map) NOTE: idk if you wanna display it for all or just skip this step now that there are multiple maps
+
+    for int_filename, ymap in y_map_per_interpolator:
+        if output_file:
+            output_path = Path(output_file)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            if output_path.exists() or output_path.is_symlink():
+                logger.warning(f"Output file exists, overwriting: {output_path}")
+                output_path.unlink()
+            af = asdf.AsdfFile(
+                {
+                    "header": {
+                        "nside": config.nside,
+                        "nest": True,
+                        "redshift": data.redshift,
+                        "search_radius_multiplier": config.search_radius,
+                        "bin_width": config.weight_bin_width,
+                        "halo_geometry": config.halo_geometry,
+                        "healpix_file": str(healcounts_file_1)
+                        if healcounts_file_1 is not None
+                        else None,
+                        "halo_catalog_file": str(halo_dir)
+                        if halo_dir is not None
+                        else None,
+                        "interpolator_filename": int_filename,
+                    },
+                    "data": {
+                        "y_map": ymap,
+                        # "halo_index": np.arange(len(data.m_halos), dtype=np.int64),
+                        # "theta_halo": data.theta,
+                        # "phi_halo": data.phi,
+                        # "y_per_halo": y_per_halo,
+                        # "halo_M": data.m_halos,
+                        # "r98_halo": data.radii_halos,
+                        # "radial_profile": [rp.as_dict() for rp in radial_profile],
+                        # "radial_profile_isolated": [rp.as_dict() for rp in radial_profile_isolated],
+                    },
+                }
+            )
+            outpath_for_interpolator = (
+                f"{output_path.stem}_{Path(int_filename).stem}_{output_path.suffix}"
+            )
+            af.write_to(output_path.with_name(outpath_for_interpolator))
+            logger.info(f"Saved to {outpath_for_interpolator}")
 
     # output_stub = str(Path(output_file).with_suffix("")) if output_file else None
     # vis = Visualizer(config.nside, output_stub)
