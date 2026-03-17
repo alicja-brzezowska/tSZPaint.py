@@ -10,6 +10,8 @@ from tszpaint.paint import (
     JAX_PATH,
 )
 from tszpaint.y_profile import create_battaglia_profile
+from tszpaint.config import OUTPUT_PATH
+from tszpaint.logging import setup_logging
 
 NSIDE = 1024
 MODEL = create_battaglia_profile()
@@ -104,6 +106,7 @@ def benchmark_paint(
 
 
 def main():
+    setup_logging("benchmark_weights")
     interpolator = load_interpolator(JAX_PATH)
 
     particle_counts = create_mock_particle_counts(NSIDE)
@@ -130,7 +133,8 @@ def main():
             f"  Unweighted: {result['unweighted_mean']:.2f} ± {result['unweighted_std']:.2f} s"
         )
 
-    output_file = Path("benchmark_weights.csv")
+    output_file = OUTPUT_PATH / "benchmark_weights.csv"
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=results[0].keys())
         writer.writeheader()

@@ -6,7 +6,7 @@ import healpy as hp
 import numpy as np
 
 from tszpaint.converters import convert_comoving_to_sky, convert_rad_to_cart
-from abacusnbody.data.compaso_halo_catalog import _unpack_euler16 as unpack_euler16  # this is directly from 
+from abacusnbody.data.compaso_halo_catalog import _unpack_euler16 as unpack_euler16  # this is directly from
 
 
 @dataclass
@@ -62,8 +62,17 @@ def obtain_healcount_edges(filepath: Path):
     return min(chis), max(chis)
 
 
+def obtain_healcount_mean_redshift(filepath: Path) -> float:
+    """Return the mean redshift of the healcounts shell from its headers."""
+    with asdf.open(filepath) as f:
+        headers = f.tree["headers"]
+        zs = [h["Redshift"] for h in headers]
+    return float(np.mean(zs))
+
+
 def load_abacus_halos(
     halo_dir: Path,
+    logm_min: float = 11.5,
 ):
     with asdf.open(halo_dir) as af:
         h = af["header"]
@@ -80,8 +89,7 @@ def load_abacus_halos(
         m_halos = num_particles.astype(np.float64) * particle_mass
 
         # most signal from larger halos (Battaglia 2012)
-        logm_threshold = 11.5
-        threshold = 10**logm_threshold
+        threshold = 10**logm_min
         cut = m_halos > threshold
 
         halo_xyz = halo_xyz[cut]
@@ -100,14 +108,15 @@ def load_abacus_halos(
         # triaxial halos
         eigenvalues = np.asarray(e["sigman_L2com_i16"], dtype=np.float64)
         eigenvectors = np.asarray(e["sigman_eigenvecs_L2com_u16"], dtype=np.float64)
-        # u16 is a smart custom encoding of the eigenvectors 
+
+        # u16 is a smart custom encoding of the eigenvectors, again convert to float 
         sigmar_min, sigmar_mid, sigmar_maj = unpack_euler16(eigenvectors)
 
         radius = radius[halo_timeslice_index]
         r100_ref = r100_ref[halo_timeslice_index]
 
-        eigenvalues = eigenvalues[halo_timeslice_index]   # (n_halos, 3)
-        sigmar_min = sigmar_min[halo_timeslice_index]     # (n_halos, 3)
+        eigenvalues = eigenvalues[halo_timeslice_index]   
+        sigmar_min = sigmar_min[halo_timeslice_index]     
         sigmar_mid = sigmar_mid[halo_timeslice_index]
         sigmar_maj = sigmar_maj[halo_timeslice_index]
 
@@ -129,27 +138,58 @@ def load_abacus_halos(
     )
 
 def load_abacus_for_painting(
-    halo_dir: Path,
+    halo_catalog_index: list,  # list[HaloCatalogInfo] from load_halo_catalog_index()
     healcounts_file_1: Path,
     nside: int | None = None,
+    logm_min: float = 11.5,
 ):
-    halo_xyz, num_particles, particle_mass, redshift, radius, comoving_distance, eigenvalues, eigenvectors = (
-        load_abacus_halos(
-            halo_dir,
-        )
-    )
-
+    """
+    """
     chi_min, chi_max = obtain_healcount_edges(healcounts_file_1)
-    chi_range = (comoving_distance >= chi_min) & (comoving_distance <= chi_max)
+    redshift = obtain_healcount_mean_redshift(healcounts_file_1)
 
-    halo_xyz = halo_xyz[chi_range]
-    num_particles = num_particles[chi_range]
-    radius = radius[chi_range]
-    eigenvalues = eigenvalues[chi_range]
-    eigenvectors = eigenvectors[chi_range]
+    # Buffer the chi edges by the comoving r200 of a reference 10^13 Msun halo,
+    # so halos whose centre is within one r200 of the boundary are excluded.
+    # This prevents edge halos from being double-counted across adjacent shells.
+    # from tszpaint.y_profile.y_profile import compute_R_delta, create_battaglia_profile
+    # _model = create_battaglia_profile()
+    # r200_physical = compute_R_delta(_model, np.array([1e13]), redshift, delta=200)[0]  # Mpc physical
+    # delta_chi = r200_physical * (1 + redshift)  # convert to comoving Mpc
+    # chi_min_cut = chi_min + delta_chi
+    # chi_max_cut = chi_max - delta_chi
+    chi_min_cut = chi_min
+    chi_max_cut = chi_max
+
+    matching = [
+        cat for cat in halo_catalog_index
+        if max(cat.chi_min, chi_min) <= min(cat.chi_max, chi_max)
+    ]
+    if not matching:
+        raise ValueError(
+            f"No halo catalogs overlap chi=[{chi_min:.2f}, {chi_max:.2f}]. "
+            "Check your halo_catalog_index."
+        )
+
+    all_xyz, all_npart, all_radius, all_evals, all_evecs = [], [], [], [], []
+    particle_mass = None
+    for cat in matching:
+        xyz, npart, pm, _, radius, comoving_distance, evals, evecs = load_abacus_halos(cat.file_path, logm_min=logm_min)
+        if particle_mass is None:
+            particle_mass = pm  # simulation-wide constant, same across files
+        in_shell = (comoving_distance >= chi_min_cut) & (comoving_distance <= chi_max_cut)
+        all_xyz.append(xyz[in_shell])
+        all_npart.append(npart[in_shell])
+        all_radius.append(radius[in_shell])
+        all_evals.append(evals[in_shell])
+        all_evecs.append(evecs[in_shell])
+
+    halo_xyz = np.concatenate(all_xyz)
+    num_particles = np.concatenate(all_npart)
+    radius = np.concatenate(all_radius)
+    eigenvalues = np.concatenate(all_evals)
+    eigenvectors = np.concatenate(all_evecs)
 
     theta, phi = convert_comoving_to_sky(halo_xyz)
-
     m_halos = num_particles.astype(np.float64) * particle_mass
     particle_counts = load_abacus_healcounts(healcounts_file_1)
     if nside is not None:

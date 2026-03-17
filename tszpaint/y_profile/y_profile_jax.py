@@ -18,7 +18,7 @@ import tszpaint.constants as const
 from tszpaint.conf.config_schema import YProfileConfig
 from tszpaint.config import INTERPOLATORS_PATH
 
-jax.config.update("jax_enable_x64", False)  # make float 64
+jax.config.update("jax_enable_x64", True)
 disable_units()
 
 FILE = Path("y_values_jax_2.pkl")
@@ -37,22 +37,21 @@ uniform_scale = jnp.linspace(0.5, 1.5, 5)  # 125 points
 def output_file_path(conf: YProfileConfig):
     return (
         INTERPOLATORS_PATH
-        / f"alpha={conf.alpha}_beta_mul={conf.beta_mul}_gamma={conf.gamma}.pkl"
+        / f"alpha={conf.alpha}_beta0={conf.beta0}_gamma={conf.gamma}_log10P0={conf.log10_P0}.pkl"
     )
 
 
 def get_gnfw_params(
-    alpha: float, beta_mul: float, gamma: float, mass: float, redshift: float
+    alpha: float, beta0: float, gamma: float, mass: float, redshift: float, log10_P0: float
 ):
     z1 = redshift + 1.0
     m = mass / 1e14
 
-    # From Battaglia et al. 2016
-    P0 = 18.1 * m**0.154 * z1 ** (-0.758)
+    # P0 and beta0 are now direct parameters, not multipliers
+    P0 = 10.0 ** log10_P0
     xc = 0.497 * m ** (-0.00865) * z1**0.731  # dimensionless scale radius
-    beta = beta_mul * m**0.0393 * z1**0.415
-    beta = gamma - alpha * beta  # Sigurd's conversion from Battaglia to standard gNFW
-    # now P(x) = P0 / (x^gamma * (1+x^alpha)^((beta-gamma)/alpha)) where x=r/r_s and r_s=xc*R_200
+    beta = beta0 * m**0.0393 * z1**0.415
+    # P(x) = P0 / (x^gamma * (1+x^alpha)^((beta-gamma)/alpha)), standard gNFW (Arnaud+2010 convention)
     return xc, alpha, beta, gamma, P0
 
 
@@ -71,8 +70,9 @@ def y_value(
     f_b: float,
     Om0: float,
     alpha: float,
-    beta_mul: float,
+    beta0: float,
     gamma: float,
+    log10_P0: float,
 ):
     theta = jnp.exp(log_theta)
     mass = 10**log_mass
@@ -86,12 +86,12 @@ def y_value(
     theta_200 = jnp.arctan(R_200 / d_A)
 
     x_sq = (theta / theta_200) ** 2
-    xc, alpha, beta, gamma, P0 = get_gnfw_params(alpha, beta_mul, gamma, mass, redshift)
+    xc, alpha, beta, gamma, P0 = get_gnfw_params(alpha, beta0, gamma, mass, redshift, log10_P0)
 
     def integrand(y):
         r_3d = jnp.sqrt(y**2 + x_sq)
         x_bar = r_3d / xc
-        generalized_nfw = x_bar**gamma * (1 + x_bar**alpha) ** ((beta - gamma) / alpha)
+        generalized_nfw = 1.0 / (x_bar**gamma * (1 + x_bar**alpha) ** ((beta - gamma) / alpha))
         return SCALE * generalized_nfw
 
     integral_value, _ = quadts(
@@ -151,11 +151,11 @@ def measure_y_values(
     mass_flat = mass_grid.ravel()
 
     vmap_all = jax.vmap(
-        y_value, in_axes=[0, 0, 0, None, None, None, None, None, None, None]
+        y_value, in_axes=[0, 0, 0, None, None, None, None, None, None, None, None]
     )
     vmap_all_jitted = jax.jit(
         vmap_all,
-        static_argnames=("H0", "H0_cgs", "f_b", "Om0", "alpha", "beta_mul", "gamma"),
+        static_argnames=("H0", "H0_cgs", "f_b", "Om0", "alpha", "beta0", "gamma", "log10_P0"),
     )
 
     t = perf_counter()
@@ -171,8 +171,9 @@ def measure_y_values(
             f_b,
             OmegaM,
             conf.alpha,
-            conf.beta_mul,
+            conf.beta0,
             conf.gamma,
+            conf.log10_P0,
         ).block_until_ready()
         results.append(y_chunk)
     y_flat = jnp.concatenate(results)
@@ -196,7 +197,9 @@ def dump_to_file(
     redshifts_np = np.asarray(redshifts)
     log_masses_np = np.asarray(log_masses)
 
-    with open(output_file_path(conf), "wb") as f:
+    out = output_file_path(conf)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "wb") as f:
         pickle.dump(
             {
                 "log_thetas": log_thetas_np,

@@ -2,12 +2,13 @@ from pathlib import Path
 import numpy as np
 from loguru import logger
 
-from tszpaint.interpolator import BattagliaLogInterpolator
+from tszpaint.y_profile.interpolator import BattagliaLogInterpolator
 from tszpaint.config import DATA_PATH
+from tszpaint.logging import setup_logging
 
-PYTHON_PATH = DATA_PATH / "y_values_python.pkl"
-JULIA_PATH = DATA_PATH / "battaglia_interpolation.jld2"
-JAX_PATH = DATA_PATH / "y_values_jax_2.pkl"
+PYTHON_PATH = Path("/home/ab2927/rds/tSZPaint.py/data/interpolators/y_values_python.pkl")
+JULIA_PATH = Path("/home/ab2927/rds/tSZPaint.py/data/interpolators/battaglia_interpolation.jld2")
+JAX_PATH = Path("/home/ab2927/rds/hpc-work/tSZPaint_data/interpolators/alpha=0.7744210557675251_beta_mul=4.269739743650696_gamma=-0.4158049788130941.pkl")
 
 LOG_THETA_MIN = -7.5
 LOG_THETA_MAX = 0.5
@@ -34,6 +35,7 @@ def get_random_points(num_per_dim: int = 10):
 
 
 if __name__ == "__main__":
+    setup_logging("interpolator_comparison_to_xgpaint")
     python_interpolator = BattagliaLogInterpolator.from_pickle(PYTHON_PATH)
     logger.info("built JAX interpolator from grid")
     julia_interpolator = BattagliaLogInterpolator.from_jld2(JULIA_PATH)

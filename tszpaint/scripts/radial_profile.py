@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+import healpy as hp
 import numpy as np
 from loguru import logger
 
@@ -60,6 +61,7 @@ class RadialProfileBuilderConfig:
     )
     log_m_halfwidth: float = 0.15
     num_bins: int = 20
+    nside: int = 8192
 
 
 @dataclass
@@ -80,10 +82,12 @@ class RadialProfileBuilder:
         good = np.isfinite(ratio) & (ratio > 0)
 
         if np.any(good):
-            x_max = float(np.nanmax(ratio[good]))
+            x_max = float(np.nanpercentile(ratio[good], 90))
+            pix_half = hp.nside2resol(self.cfg.nside) / 2
+            x_min = pix_half / float(np.nanpercentile(theta_200[good], 90))
         else:
             x_max = 1.0
-        x_min = max(1e-4, x_max / 1e3)
+            x_min = 1e-4
 
         bin_edges = np.logspace(
             np.log10(x_min),

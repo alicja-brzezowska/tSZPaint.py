@@ -7,15 +7,16 @@ from tszpaint.paint import (
     paint_y_chunked,
     load_interpolator,
 )
-from tszpaint.config import DATA_PATH, INTERPOLATORS_PATH
+from tszpaint.config import INTERPOLATORS_PATH, OUTPUT_PATH
+from tszpaint.logging import setup_logging
 
 # Configuration
 NSIDE = 2048
 N_HALOS = 10000
 Z = 0.5
 SEED = 42
-OUTPUT_DIR = DATA_PATH / "comparison_output"
-OUTPUT_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR = OUTPUT_PATH / "comparison_output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def create_catalog():
@@ -102,6 +103,7 @@ def save_python_map(y_map, filename="python_map.fits"):
 
 
 def main():
+    setup_logging("paint_comparison_to_xgpaint")
     print(f"Configuration:")
     print(f"  N_halos: {N_HALOS}")
     print(f"  NSIDE:   {NSIDE}")

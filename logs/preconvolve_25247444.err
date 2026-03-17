@@ -1,0 +1,5 @@
+2026-03-17 00:35:27.522 | INFO     | __main__:main:184 - chi range: [1352.3, 1558.8] Mpc/h
+2026-03-17 00:35:27.524 | INFO     | __main__:main:214 - Pre-convolving y-map: /home/ab2927/rds/hpc-work/tSZPaint_data/Step0677-0682/alpha=0.7824150337281709_beta0=5.739888474752271_gamma=-0.05024090779728241_log10P0=1.7055429724569904.asdf
+2026-03-17 00:35:30.203 | INFO     | ACT_data_match:convolve_beam:33 - Convolving beam (custom): FWHM=1.6 arcmin
+2026-03-17 01:27:05.279 | INFO     | ACT_data_match:convolve_beam:46 - Beam convolution done in 3095.1s
+2026-03-17 01:27:09.506 | INFO     | __main__:main:219 - Saved beam-convolved map (nside=8192) → /home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles/ymap_beam_convolved.npy

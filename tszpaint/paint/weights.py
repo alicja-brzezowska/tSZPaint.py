@@ -1,5 +1,6 @@
 from typing import Literal
 
+import healpy as hp
 import numpy as np
 from numba import jit, prange
 
@@ -27,6 +28,7 @@ def _fast_init_weights(
 def weights_mechanism(
     search_radius: float,
     bin_width: float,
+    pixel_size: float,
     distances: np.ndarray,
     halo_starts: np.ndarray,
     halo_counts: np.ndarray,
@@ -49,7 +51,11 @@ def weights_mechanism(
         w = init_weights[start : start + count]
 
         search_radius_h = search_radius * r_90[h]
-        n_bins_h = max(1, int(np.rint(search_radius_h / bin_width)))
+        # Cap n_bins so each bin is at least one pixel wide — sub-pixel bins
+        # contain at most one pixel, causing the normalization to cancel the
+        # raw weight entirely and destroy the pressure-based weighting.
+        max_bins = max(1, int(search_radius_h / pixel_size))
+        n_bins_h = min(max(1, int(np.rint(search_radius_h / bin_width))), max_bins)
         bin_width_h = search_radius_h / n_bins_h
 
         # For each particle in halo, find which bin it belongs to
@@ -100,10 +106,13 @@ def compute_weights(
     # Use JIT-compiled function for fast parallel index lookup and power operation
     init_weights = _fast_init_weights(particle_counts, pixel_indices)
 
+    pixel_size = float(hp.nside2resol(config.nside))
+
     if method == "normal":
         return weights_mechanism(
             config.search_radius,
             config.weight_bin_width,
+            pixel_size,
             distances,
             halo_starts,
             halo_counts,
@@ -114,6 +123,7 @@ def compute_weights(
         return weights_mechanism_vec(
             config.search_radius,
             config.weight_bin_width,
+            pixel_size,
             distances,
             halo_counts,
             r_90,
@@ -125,6 +135,7 @@ def compute_weights(
 def weights_mechanism_vec(
     search_radius: float,
     bin_width: float,
+    pixel_size: float,
     distances: np.ndarray,
     halo_counts: np.ndarray,
     r_90: np.ndarray,
@@ -135,7 +146,14 @@ def weights_mechanism_vec(
     halo_ids = np.repeat(np.arange(len(r_90)), halo_counts)
 
     search_radii = search_radius * r_90
-    n_bins_per_halo = np.maximum(1, np.rint(search_radii / bin_width).astype(np.int64))
+    # Cap n_bins so each bin is at least one pixel wide — sub-pixel bins
+    # contain at most one pixel, causing the normalization to cancel the
+    # raw weight entirely and destroy the pressure-based weighting.
+    max_bins_per_halo = np.maximum(1, (search_radii / pixel_size).astype(np.int64))
+    n_bins_per_halo = np.minimum(
+        np.maximum(1, np.rint(search_radii / bin_width).astype(np.int64)),
+        max_bins_per_halo,
+    )
     bin_width_per_halo = search_radii / n_bins_per_halo
 
     # Assign particles to radial bins with halo-dependent bin count

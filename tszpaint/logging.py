@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from datetime import datetime
 from time import perf_counter
 from typing import Any, Callable, ParamSpec, TypeVar
 
@@ -7,6 +8,16 @@ import psutil
 import wrapt
 from loguru import logger
 import os
+
+from tszpaint.config import LOGS_PATH
+
+
+def setup_logging(script_name: str) -> None:
+    """Add a loguru file sink under LOGS_PATH for the given script."""
+    LOGS_PATH.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = LOGS_PATH / f"{script_name}_{timestamp}.log"
+    logger.add(log_file, level="DEBUG")
 
 P = ParamSpec("P")
 R = TypeVar("R")

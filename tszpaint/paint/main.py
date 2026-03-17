@@ -1,70 +1,45 @@
-from datetime import datetime
-
 from loguru import logger
 
 from tszpaint.config import (
-    HALO_CATALOGS_PATH,
     OUTPUT_PATH,
-    HEALCOUNTS_PATH,
     HEALCOUNTS_TOTAL_PATH,
-    INTERPOLATORS_PATH,
 )
+from tszpaint.logging import setup_logging
 from tszpaint.paint.config import PainterConfig
-from tszpaint.paint.mock_data_generator import MockDataGenerator
-from tszpaint.paint.paint import paint_abacus, paint_and_visualize
+from tszpaint.paint.paint import paint_abacus
+from tszpaint.scripts.match_redshifts import load_halo_catalog_index
 
 NSIDE = 8192
-N = 4  # Multiple of r_90/ r_95 / r_98 to search
+N = 4  # Multiple of r_90 / r_95 / r_98 to search
 WEIGHT_BIN_WIDTH = 2e-5
-USE_WEIGHTS = False
-
-MOCK = False
+USE_WEIGHTS = True
+LOGM_MIN = 11.5 # cutoff mass 
 
 
 def main():
-    if MOCK:
-        nside = 1024
-        config = PainterConfig(
-            nside=nside, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH
-        )
-        gen = MockDataGenerator(100, nside=nside)
-        data = gen.generate_simulation_data()
-        paint_and_visualize(config, data, None)
+    setup_logging("main")
+    config = PainterConfig(
+        nside=NSIDE, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH
+    )
+    halo_catalog_index = load_halo_catalog_index(OUTPUT_PATH / "halo_catalog_index.json")
+    healcounts_file1 = (
+        HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0617-0622.asdf"
+    )
+    output_file = OUTPUT_PATH
+    logger.info("Painting Abacus tSZ map...")
+    logger.info(f"Halo catalog index: {len(halo_catalog_index)} entries")
+    logger.info(f"Healcounts file 1: {healcounts_file1}")
+    logger.info(f"Output file: {output_file}")
+    logger.info(f"logM min: {LOGM_MIN}")
 
-    else:
-        config = PainterConfig(
-            nside=NSIDE, search_radius=N, weight_bin_width=WEIGHT_BIN_WIDTH
-        )
-        halo_dir = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-        healcounts_file1 = (
-            HEALCOUNTS_TOTAL_PATH / "LightCone0_total_heal-counts_Step0671-0676.asdf"
-        )
-        healcounts_file2 = (
-            HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
-        )
-        healcounts_file3 = (
-            HEALCOUNTS_PATH / "LightCone0_total_heal-counts_Step0665-0670.asdf"
-        )
-        JAX_PATH = INTERPOLATORS_PATH / "y_values_jax_2.pkl"
-        date_dir = datetime.now().strftime("%Y-%m-%d")
-        output_dir = OUTPUT_PATH / "visualization" / date_dir
-        output_file = output_dir / "logM_11.5_just_map.asdf"
-
-        logger.info("Painting Abacus tSZ map...")
-        logger.info(f"Halo directory: {halo_dir}")
-        logger.info(f"Healcounts file 1: {healcounts_file1}")
-        # logger.info(f"Healcounts file 2: {healcounts_file2}")
-        # logger.info(f"Healcounts file 3: {healcounts_file3}")
-        logger.info(f"Output file: {output_file}")
-
-        paint_abacus(
-            config,
-            halo_dir=halo_dir,
-            healcounts_file_1=healcounts_file1,
-            output_file=output_file,
-            interpolator_path=JAX_PATH,
-            use_weights=USE_WEIGHTS,
-        )
+    paint_abacus(
+        config,
+        halo_catalog_index=halo_catalog_index,
+        healcounts_file_1=healcounts_file1,
+        output_file=output_file,
+        use_weights=USE_WEIGHTS,
+        logm_min=LOGM_MIN,
+    )
 
 
 if __name__ == "__main__":
