@@ -9,6 +9,9 @@ Forward model: stack tSZ y-map at mock LRG positions and compute CAP-filtered pr
   6. Stack (mean) over all galaxies → y_CAP(theta)
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import numpy as np
 import healpy as hp
 import asdf
@@ -57,38 +60,34 @@ def load_lrg_catalog(lrg_file):
     return theta, phi
 
 
-def cap_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES):
+def cap_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, n_workers=None):
+
+    if n_workers is None:
+        n_workers = os.cpu_count()
 
     N_gal = len(theta)
-    N_ap = len(apertures_arcmin)
+    N_ap  = len(apertures_arcmin)
     cap_values = np.zeros((N_gal, N_ap))
 
-    ap_rad    = np.deg2rad(apertures_arcmin / 60.0)   # (N_ap,)
-    outer_rad = np.sqrt(2) * ap_rad                    # (N_ap,)
-    max_rad   = outer_rad[-1]                          # apertures sorted → last is largest
+    ap_rad    = np.deg2rad(apertures_arcmin / 60.0)
+    outer_rad = np.sqrt(2) * ap_rad
+    max_rad   = outer_rad[-1]
 
-    t0 = perf_counter()
-    for i in range(N_gal):
-        if i % 50000 == 0:
-            elapsed = perf_counter() - t0
-            rate = i / elapsed if elapsed > 0 else 0
-            eta = (N_gal - i) / rate if rate > 0 else float('inf')
-            logger.info(f"CAP: {i}/{N_gal} ({100*i/N_gal:.0f}%)  {rate:.0f} gal/s  ETA {eta/60:.1f} min")
-
+    def process_galaxy(i):
         vec  = hp.ang2vec(theta[i], phi[i])
         ipix = hp.query_disc(nside, vec, max_rad, nest=True)
         if len(ipix) == 0:
-            continue
+            return i, np.zeros(N_ap)
 
-        pix_vec = np.array(hp.pix2vec(nside, ipix, nest=True)).T  # (N_pix, 3)
-        ang     = np.arccos(np.clip(pix_vec @ vec, -1.0, 1.0))    # radians
+        pix_vec = np.array(hp.pix2vec(nside, ipix, nest=True)).T
+        ang     = np.arccos(np.clip(pix_vec @ vec, -1.0, 1.0))
 
-        # Sort once by angle; use cumulative sum to get bin means without masking
-        sort_idx  = np.argsort(ang)
-        ang_s     = ang[sort_idx]
-        y_s       = ymap[ipix[sort_idx]].astype(np.float64)
-        cumsum    = np.cumsum(y_s)
+        sort_idx = np.argsort(ang)
+        ang_s    = ang[sort_idx]
+        y_s      = ymap[ipix[sort_idx]].astype(np.float64)
+        cumsum   = np.cumsum(y_s)
 
+        row = np.zeros(N_ap)
         for j in range(N_ap):
             n_disc  = np.searchsorted(ang_s, ap_rad[j],    side='right')
             n_outer = np.searchsorted(ang_s, outer_rad[j], side='right')
@@ -97,11 +96,86 @@ def cap_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES):
                 continue
             disc_sum = cumsum[n_disc - 1]
             ann_sum  = cumsum[n_outer - 1] - cumsum[n_disc - 1]
-            # Divide both by their respective number of pixels (means)
-            cap_values[i, j] = (disc_sum / n_disc) - (ann_sum / n_ann)
+            row[j]   = (disc_sum / n_disc) - (ann_sum / n_ann)
+        return i, row
+
+    t0 = perf_counter()
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        futures = {executor.submit(process_galaxy, i): i for i in range(N_gal)}
+        for k, future in enumerate(as_completed(futures)):
+            if k % 50000 == 0:
+                elapsed = perf_counter() - t0
+                rate = k / elapsed if elapsed > 0 else 0
+                eta  = (N_gal - k) / rate if rate > 0 else float('inf')
+                logger.info(f"CAP: {k}/{N_gal} ({100*k/N_gal:.0f}%)  {rate:.0f} gal/s  ETA {eta/60:.1f} min")
+            i, row = future.result()
+            cap_values[i] = row
 
     logger.info(f"CAP filter done in {perf_counter()-t0:.1f}s")
     return cap_values
+
+
+def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, ring_width_arcmin=0.5, n_workers=None):
+    """Non-cumulative ring-ring filter. For each aperture θ_d:
+      θ_0 = θ_d - ring_width (inner edge), θ_outer = sqrt(2θ_d² - θ_0²) (equal-area outer edge)
+      F = mean(y in [θ_0, θ_d]) - mean(y in [θ_d, θ_outer])
+    """
+    if n_workers is None:
+        n_workers = os.cpu_count()
+
+    N_gal = len(theta)
+    N_ap  = len(apertures_arcmin)
+    rr_values = np.zeros((N_gal, N_ap))
+
+    theta_d   = np.deg2rad(apertures_arcmin / 60.0)
+    theta_0   = np.maximum(np.deg2rad((apertures_arcmin - ring_width_arcmin) / 60.0), 0.0)
+    theta_out = np.sqrt(2 * theta_d**2 - theta_0**2)
+    max_rad   = theta_out[-1]
+
+    def process_galaxy(i):
+        vec  = hp.ang2vec(theta[i], phi[i])
+        ipix = hp.query_disc(nside, vec, max_rad, nest=True)
+        if len(ipix) == 0:
+            return i, np.zeros(N_ap)
+
+        pix_vec = np.array(hp.pix2vec(nside, ipix, nest=True)).T
+        ang     = np.arccos(np.clip(pix_vec @ vec, -1.0, 1.0))
+
+        sort_idx = np.argsort(ang)
+        ang_s    = ang[sort_idx]
+        y_s      = ymap[ipix[sort_idx]].astype(np.float64)
+        cumsum   = np.cumsum(y_s)
+
+        row = np.zeros(N_ap)
+        for j in range(N_ap):
+            i0   = np.searchsorted(ang_s, theta_0[j],   side='right')
+            id_  = np.searchsorted(ang_s, theta_d[j],   side='right')
+            iout = np.searchsorted(ang_s, theta_out[j], side='right')
+
+            n_inner = id_  - i0
+            n_outer = iout - id_
+            if n_inner == 0 or n_outer == 0:
+                continue
+
+            sum_inner = cumsum[id_ - 1]  - (cumsum[i0 - 1] if i0 > 0 else 0.0)
+            sum_outer = cumsum[iout - 1] - cumsum[id_ - 1]
+            row[j]    = (sum_inner / n_inner) - (sum_outer / n_outer)
+        return i, row
+
+    t0 = perf_counter()
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        futures = {executor.submit(process_galaxy, i): i for i in range(N_gal)}
+        for k, future in enumerate(as_completed(futures)):
+            if k % 50000 == 0:
+                elapsed = perf_counter() - t0
+                rate = k / elapsed if elapsed > 0 else 0
+                eta  = (N_gal - k) / rate if rate > 0 else float('inf')
+                logger.info(f"RR: {k}/{N_gal} ({100*k/N_gal:.0f}%)  {rate:.0f} gal/s  ETA {eta/60:.1f} min")
+            i, row = future.result()
+            rr_values[i] = row
+
+    logger.info(f"Ring-ring filter done in {perf_counter()-t0:.1f}s")
+    return rr_values
 
 
 def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True):

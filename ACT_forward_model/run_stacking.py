@@ -21,6 +21,10 @@ YMAP_DIR   = YMAP_ROOT / "Step0677-0682"
 
 HEALCOUNTS_DIR = Path("/home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/total/heal-counts")
 SUMMED_STEPS = [
+    "Step0617-0622",
+    "Step0623-0627",
+    "Step0628-0634",
+    "Step0635-0640",
     "Step0641-0646",
     "Step0647-0652",
     "Step0653-0658",
@@ -34,6 +38,8 @@ LRG_SNAPSHOTS = [
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.503/galaxies_rsd/LRGs.dat",
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.542/galaxies_rsd/LRGs.dat",
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.582/galaxies_rsd/LRGs.dat",
+    YMAP_ROOT / "hod_mocks/lightcone_halos/z0.625/galaxies_rsd/LRGs.dat",
+    YMAP_ROOT / "hod_mocks/lightcone_halos/z0.671/galaxies_rsd/LRGs.dat",
 ]
 
 PARAM_NAMES = ["alpha", "beta0", "gamma", "log10P0"]
@@ -45,7 +51,7 @@ PARAM_RE = re.compile(
     r"_log10P0=(?P<log10P0>[+-]?\d+\.?\d*(?:e[+-]?\d+)?)"
 )
 
-# Set at startup in main(), read by worker processes via fork-inherited globals
+
 _THETA_LRG = None
 _PHI_LRG   = None
 _APPLY_BEAM = True
@@ -106,7 +112,7 @@ def _process_one(fname: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--param",   default=None)
-    parser.add_argument("--output",  default="all_steps_stacked.npz")
+    parser.add_argument("--output",  default="all_steps_stacked_new.npz")
     parser.add_argument("--no-beam", action="store_true")
     parser.add_argument("--nproc",   type=int, default=1,
                         help="Number of parallel workers (each needs ~11 GB)")

@@ -1,9 +1,4 @@
-"""
-Nested sampling inference of Battaglia parameters using the GP emulator.
 
-  python dynesty_inference.py
-  python dynesty_inference.py --nlive 500 --plot
-"""
 
 import pickle
 import numpy as np

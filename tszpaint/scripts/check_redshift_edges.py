@@ -1,4 +1,4 @@
-from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_PATH
+from tszpaint.config import HALO_CATALOGS_PATH, HEALCOUNTS_TOTAL_PATH
 import asdf
 from pathlib import Path
 
@@ -84,60 +84,35 @@ def obtain_halo_edges_multiple(*filepaths):
 
 
 def main():
-    # Obtain edges from heal-counts files
-    healcount_file_2 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0677-0682.asdf"
-    )
-    healcount_file_3 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0671-0676.asdf"
-    )
-    healcount_file_4 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0665-0670.asdf"
-    )
-    healcount_file_5 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0659-0664.asdf"
-    )
-    healcount_file_6 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0653-0658.asdf"
-    )
-    healcount_file_7 = (
-        HEALCOUNTS_PATH / "LightCone0_halo_heal-counts_Step0647-0652.asdf"
+    # Discover all healcounts files, sorted by step number
+    healcount_files = sorted(HEALCOUNTS_TOTAL_PATH.glob("*.asdf"))
+
+    # Discover all halo z-directories, sorted by redshift
+    halo_z_dirs = sorted(
+        [d for d in HALO_CATALOGS_PATH.iterdir() if d.is_dir() and d.name.startswith("z")],
+        key=lambda d: float(d.name[1:]),
     )
 
-    inner_edge, outer_edge = obtain_healcount_edges(healcount_file_2)
-    print(
-        f"Halo shell edges for file {healcount_file_2.name} (Mpc/h): {inner_edge:.1f} – {outer_edge:.1f}"
-    )
+    # Compute edges for each halo z-directory
+    halo_edges = {}
+    for z_dir in halo_z_dirs:
+        halo_file = z_dir / "lightcone_halo_info_000.asdf"
+        inner, outer = obtain_halo_edges_multiple(halo_file)
+        halo_edges[z_dir.name] = (inner, outer)
 
-    inner_edge, outer_edge = obtain_healcount_edges(healcount_file_3)
-    print(
-        f"Halo shell edges for file {healcount_file_3.name} (Mpc/h): {inner_edge:.1f} – {outer_edge:.1f}"
-    )
-
-    inner_edge, outer_edge = obtain_healcount_edges(healcount_file_4)
-    print(
-        f"Halo shell edges for file {healcount_file_4.name} (Mpc/h): {inner_edge:.1f} – {outer_edge:.1f}"
-    )
-
-    # Obtain edges from halo catalog file
-    halo_catalog_file_1 = HALO_CATALOGS_PATH / "z0.503" / "lightcone_halo_info_000.asdf"
-    halo_catalog_file_3 = HALO_CATALOGS_PATH / "z0.582" / "lightcone_halo_info_000.asdf"
-    halo_catalog_file_2 = HALO_CATALOGS_PATH / "z0.542" / "lightcone_halo_info_000.asdf"
-    halo_catalog_file_4 = HALO_CATALOGS_PATH / "z0.625" / "lightcone_halo_info_000.asdf"
-
-    halo_inner_edge, halo_outer_edge = obtain_halo_edges(
-        halo_catalog_file_1, halo_catalog_file_2, halo_catalog_file_3
-    )
-    print(
-        f"Halo catalog comoving distance range (Mpc/h): {halo_inner_edge:.1f} – {halo_outer_edge:.1f}"
-    )
-
-    halo_inner_edge, halo_outer_edge = obtain_halo_edges(
-        halo_catalog_file_4, halo_catalog_file_2, halo_catalog_file_3
-    )
-    print(
-        f"Halo catalog comoving distance range (Mpc/h): {halo_inner_edge:.1f} – {halo_outer_edge:.1f}"
-    )
+    # For each healcounts file, find which halo z-dirs fall within its range
+    print(f"{'Healcounts file':<55} {'Range (Mpc/h)':<25} Matching halo z-dirs")
+    print("-" * 120)
+    for hc_file in healcount_files:
+        hc_inner, hc_outer = obtain_healcount_edges(hc_file)
+        matches = [
+            z_name
+            for z_name, (h_inner, h_outer) in halo_edges.items()
+            if h_inner < hc_outer and h_outer > hc_inner  # ranges overlap
+        ]
+        print(
+            f"{hc_file.name:<55} {hc_inner:.1f} – {hc_outer:.1f}{'':>10} {', '.join(matches) or 'none'}"
+        )
 
 
 if __name__ == "__main__":

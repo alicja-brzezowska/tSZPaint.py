@@ -7,7 +7,7 @@ sim_params:
     sim_dir: '/home/ab2927/rds/hpc-work/backlight_cp999'
     output_dir: '/home/ab2927/rds/hpc-work/tSZPaint_data/hod_mocks'
     subsample_dir: '/home/ab2927/rds/hpc-work/tSZPaint_data/hod_subsamples'
-    z_mock: 0.582
+    z_mock: 0.671
     halo_lc: True # enable for halo light cones TODO: can make automatic
     cleaned_halos: False
 

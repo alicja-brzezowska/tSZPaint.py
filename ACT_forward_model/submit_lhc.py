@@ -1,7 +1,4 @@
-"""
-Submit 125 y-profile jobs on a Latin Hypercube sample of Battaglia parameters.
-Run with: uv run python submit_lhc.py
-"""
+
 import numpy as np
 import submitit
 from scipy.stats import qmc
@@ -11,12 +8,13 @@ from tszpaint.y_profile.y_profile_jax import run_y_profile
 
 
 # Latin Hypercube Sampling for 125 samples in the parameter space
-# alpha: [0.5, 1.5], beta0: [3.0, 6.0], gamma: [0.05, 0.8], log10_P0: [-2, 2]
+# alpha: [0.5, 1.5], beta0: [3.0, 6.0], gamma: [-0.8, -0.05], log10_P0: [-2, 2]
+# gamma is negative (Arnaud+2010 gNFW convention: P ∝ 1/(x^gamma * ...) with gamma < 0 gives cuspy centre)
 sampler = qmc.LatinHypercube(d=4, seed=42)
 samples = qmc.scale(
     sampler.random(n=125),
-    l_bounds=[0.5, 3.0, 0.05, -2.0],
-    u_bounds=[1.5, 6.0, 0.80, 2.0],
+    l_bounds=[0.5, 3.0, -0.80, -2.0],
+    u_bounds=[1.5, 6.0, -0.05,  2.0],
 )
 np.savetxt("lhc_samples.txt", samples, header="alpha beta0 gamma log10_P0")
 
