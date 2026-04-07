@@ -16,7 +16,7 @@ COLORS = ['steelblue', 'tomato', 'seagreen', 'darkorange', 'purple']
 FMTS   = ['o--', 's--', '^--', 'D--', 'v--']
 
 # Liu+2025 ACT DR6 fiducial, pz1 (z̄=0.470), apertures 1.0–6.0 arcmin
-# Units: Y_CAP [arcmin²]  (already in arcmin², plot ×1e6)
+# Y_CAP [arcmin²]  (plot ×1e6)
 ACT_AP  = np.array([1.0, 1.625, 2.25, 2.875, 3.5, 4.125, 4.75, 5.375, 6.0])
 ACT_Y   = np.array([8.9375901426e-08, 3.5286669084e-07, 7.0189522333e-07,
                     1.2090546136e-06, 1.6113528108e-06, 1.9116110451e-06,

@@ -19,7 +19,9 @@ from astropy.table import Table
 from time import perf_counter
 from loguru import logger
 
-APERTURES = np.array([1.0, 1.625, 2.25, 2.875, 3.5, 4.125, 4.75, 5.375, 6.0])  # arcmin
+APERTURES_CAP = np.array([1.0, 1.625, 2.25, 2.875, 3.5, 4.125, 4.75, 5.375, 6.0])  # arcmin, CAP filter
+APERTURES_RR  = np.array([1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0])  # arcmin, ring-ring filter
+APERTURES = APERTURES_CAP  # default
 BEAM_FWHM = 1.6   # Liu 2025, arcmin
 
 def load_ymap(ymap_file):
@@ -115,7 +117,7 @@ def cap_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, n_workers=No
     return cap_values
 
 
-def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, ring_width_arcmin=0.5, n_workers=None):
+def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES_RR, ring_width_arcmin=0.5, n_workers=None):
     """Non-cumulative ring-ring filter. For each aperture θ_d:
       θ_0 = θ_d - ring_width (inner edge), θ_outer = sqrt(2θ_d² - θ_0²) (equal-area outer edge)
       F = mean(y in [θ_0, θ_d]) - mean(y in [θ_d, θ_outer])
@@ -178,7 +180,7 @@ def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, ring_w
     return rr_values
 
 
-def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True):
+def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True, n_workers=None):
     """
     ymap_file : str — single pre-summed y-map (ASDF)
     theta, phi: pre-loaded, chi-filtered galaxy positions in radians
@@ -194,22 +196,22 @@ def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True):
 
     logger.info(f"{len(theta):,} galaxies")
 
-    logger.info("Applying CAP filter...")
-    cap_values = cap_filter(ymap, nside, theta, phi)
+    logger.info("Applying ring-ring filter...")
+    cap_values = ring_ring_filter(ymap, nside, theta, phi, n_workers=n_workers)
 
     y_stacked = cap_values.mean(axis=0)
     y_err     = cap_values.std(axis=0) / np.sqrt(len(theta))
-    logger.info("Stacked CAP profile:")
-    for ap, y, e in zip(APERTURES, y_stacked, y_err):
-        logger.info(f"  {ap:.0f} arcmin: {y:.4e} ± {e:.4e}")
+    logger.info("Stacked ring-ring profile:")
+    for ap, y, e in zip(APERTURES_RR, y_stacked, y_err):
+        logger.info(f"  {ap:.1f} arcmin: {y:.4e} ± {e:.4e}")
     logger.info(f"Total stack_profiles time: {perf_counter()-t_total:.1f}s")
 
     if output_file:
         np.savez(output_file,
-                 apertures_arcmin=APERTURES,
+                 apertures_arcmin=APERTURES_RR,
                  y_stacked=y_stacked,
                  y_err=y_err,
-                 cap_values=cap_values)
+                 rr_values=cap_values)
         logger.info(f"Saved to {output_file}")
 
     return y_stacked, y_err

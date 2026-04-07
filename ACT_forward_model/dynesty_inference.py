@@ -4,6 +4,7 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty.utils import resample_equal
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from gp_emulator import GPEmulator
 
@@ -152,7 +153,6 @@ def plot_fit_anchored(results, emulator, apertures, y_data, y_err, out_path, n_s
 
 
 if __name__ == "__main__":
-    # import pandas as pd
     from pathlib import Path
 
     emulator_path = "/home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles/all_steps_stacked_new.pkl"
@@ -161,18 +161,19 @@ if __name__ == "__main__":
     out_dir.mkdir(exist_ok=True)
 
     # data (Liu et al. 2025)
-    # _df     = pd.read_csv(Path(__file__).parent / "fig4.csv").dropna()
-    # ACT_AP  = _df["RApArcmin"].values
-    # ACT_Y   = _df["pz2_act_dr6_Beta_1.6"].values
-    # ACT_ERR = _df["pz2_act_dr6_Beta_1.6_err"].values
-    ACT_AP  = np.array([1.0, 1.625, 2.25, 2.875, 3.5, 4.125, 4.75, 5.375, 6.0])
-    ACT_Y   = np.array([8.9375901426e-08, 3.5286669084e-07, 7.0189522333e-07,
-                        1.2090546136e-06, 1.6113528108e-06, 1.9116110451e-06,
-                        2.3413244009e-06, 2.9703678477e-06, 3.6016090038e-06])
-    ACT_ERR = np.array([9.4267502323e-09, 2.2639352683e-08, 3.6185523443e-08,
-                        5.6818925154e-08, 8.2360102801e-08, 1.1498411717e-07,
-                        1.4746886290e-07, 1.8369545709e-07, 2.1632720061e-07])
-    _corr   = np.load(Path(__file__).parent / "fig6_pz2.npy")
+    _df     = pd.read_csv(Path(__file__).parent / "data" / "fig4.csv").dropna()
+    ACT_AP  = _df["RApArcmin"].values
+    ACT_Y   = _df["pz2_act_dr6_Beta_1.6"].values
+    ACT_ERR = _df["pz2_act_dr6_Beta_1.6_err"].values
+    #ACT_AP  = np.array([1.0, 1.625, 2.25, 2.875, 3.5, 4.125, 4.75, 5.375, 6.0])
+    #ACT_Y   = np.array([8.9375901426e-08, 3.5286669084e-07, 7.0189522333e-07,
+    #                    1.2090546136e-06, 1.6113528108e-06, 1.9116110451e-06,
+    #                    2.3413244009e-06, 2.9703678477e-06, 3.6016090038e-06])
+    #ACT_ERR = np.array([9.4267502323e-09, 2.2639352683e-08, 3.6185523443e-08,
+    #                    5.6818925154e-08, 8.2360102801e-08, 1.1498411717e-07,
+    #                    1.4746886290e-07, 1.8369545709e-07, 2.1632720061e-07])
+    _corr_npz = np.load(Path(__file__).parent / "data" / "fig4_cov.npz")
+    _corr   = _corr_npz[_corr_npz.files[0]]
     COV_DATA = np.diag(ACT_ERR) @ _corr @ np.diag(ACT_ERR)
 
     # prior bounds
@@ -182,18 +183,38 @@ if __name__ == "__main__":
         (float(np.percentile(_npz["params"][:, i], 5)), float(np.percentile(_npz["params"][:, i], 95)))
         for i in range(_npz["params"].shape[1])
     ]
+    # override beta0 to a narrow range to test convergence
+    # if "beta0" in param_names:
+    #     beta0_idx = param_names.index("beta0")
+    #     prior_bounds[beta0_idx] = (3.1, 4.0)
 
     em = GPEmulator.load(emulator_path)
 
-    log_likelihood  = make_log_likelihood_anchored(em, ACT_Y, COV_DATA)
-    prior_transform = make_prior_transform(prior_bounds)
+    # 1D inference: fix alpha and gamma, let beta0 vary; anchored likelihood handles normalisation
+    fixed_params = {"alpha": 1.0, "gamma": -0.3}
+    beta0_idx = param_names.index("beta0")
+    fixed_theta = np.array([fixed_params.get(n, 0.0) for n in param_names])
 
-    results = run_nested(log_likelihood, prior_transform, ndim=len(param_names))
+    def log_likelihood_beta0(u):
+        theta = fixed_theta.copy()
+        theta[beta0_idx] = float(u[0])
+        return make_log_likelihood_anchored(em, ACT_Y, COV_DATA)(theta)
+
+    beta0_prior = make_prior_transform([(3.1, 4.0)])  
+    results = run_nested(log_likelihood_beta0, beta0_prior, ndim=1)
+    param_names_1d = ["beta0"]
 
     with open(out_dir / "dynesty_results.pkl", "wb") as f:
         pickle.dump(results, f)
     print(f"Results → {out_dir / 'dynesty_results.pkl'}")
 
-    summarise(results, param_names)
-    plot_corner(results, param_names, out_dir / "corner_anchored.png")
-    plot_fit_anchored(results, em, ACT_AP, ACT_Y, ACT_ERR, out_dir / "fit_plot_anchored.png")
+    summarise(results, param_names_1d)
+    plot_corner(results, param_names_1d, out_dir / "corner_beta0_1d.png")
+
+    def _predict_beta0(theta_1d):
+        theta = fixed_theta.copy()
+        theta[beta0_idx] = float(np.asarray(theta_1d).flat[0])
+        return em.predict(theta.reshape(1, -1))
+
+    em_1d = type("_Em1D", (), {"predict": staticmethod(_predict_beta0)})()
+    plot_fit_anchored(results, em_1d, ACT_AP, ACT_Y, ACT_ERR, out_dir / "fit_plot_beta0_1d.png")

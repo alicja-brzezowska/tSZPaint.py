@@ -13,7 +13,7 @@ from astropy.table import Table, vstack
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tszpaint.logging import setup_logging
 from tszpaint.paint.abacus_loader import obtain_healcount_edges
-from ACT_data_match import stack_profiles, APERTURES
+from ACT_data_match import stack_profiles, APERTURES_RR
 
 YMAP_ROOT  = Path("/home/ab2927/rds/hpc-work/tSZPaint_data")
 OUT_ROOT   = Path("/home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles")
@@ -52,9 +52,10 @@ PARAM_RE = re.compile(
 )
 
 
-_THETA_LRG = None
-_PHI_LRG   = None
+_THETA_LRG  = None
+_PHI_LRG    = None
 _APPLY_BEAM = True
+_N_WORKERS  = None
 
 
 def parse_params(filename: str) -> dict:
@@ -102,7 +103,7 @@ def _process_one(fname: str):
     params = parse_params(fname)
     t0 = perf_counter()
     y_stacked, y_err = stack_profiles(
-        str(YMAP_DIR / fname), _THETA_LRG, _PHI_LRG, apply_beam=_APPLY_BEAM
+        str(YMAP_DIR / fname), _THETA_LRG, _PHI_LRG, apply_beam=_APPLY_BEAM, n_workers=_N_WORKERS
     )
     elapsed = perf_counter() - t0
     gc.collect()   # ensure the 3 GB y-map is released before next job
@@ -112,21 +113,22 @@ def _process_one(fname: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--param",   default=None)
-    parser.add_argument("--output",  default="all_steps_stacked_new.npz")
+    parser.add_argument("--output",  default="all_steps_stacked_ring_ring11.npz")
     parser.add_argument("--no-beam", action="store_true")
     parser.add_argument("--nproc",   type=int, default=1,
                         help="Number of parallel workers (each needs ~11 GB)")
     args = parser.parse_args()
 
-    setup_logging("cap_stack")
+    setup_logging("ring_ring_stack")
 
     chi_min, chi_max = get_chi_range()
     logger.info(f"Summed y-map chi range: [{chi_min:.1f}, {chi_max:.1f}] Mpc/h")
 
     # Load LRGs once; fork-inherited by all workers at no extra memory cost
-    global _THETA_LRG, _PHI_LRG, _APPLY_BEAM
+    global _THETA_LRG, _PHI_LRG, _APPLY_BEAM, _N_WORKERS
     _THETA_LRG, _PHI_LRG = load_and_filter_lrgs(chi_min, chi_max)
     _APPLY_BEAM = not args.no_beam
+    _N_WORKERS  = max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count())) // args.nproc)
 
     all_fnames = sorted(f.name for f in YMAP_DIR.glob("*.asdf"))
     if args.param:
@@ -169,7 +171,7 @@ def main():
         param_names=PARAM_NAMES,
         profiles=np.array(profiles),     # (N, N_ap)
         errors=np.array(errors),         # (N, N_ap)
-        apertures_arcmin=APERTURES,
+        apertures_arcmin=APERTURES_RR,
     )
     print(f"Saved {len(profiles)} profiles → {out_file}")
 
