@@ -29,16 +29,19 @@ class GPEmulator:
             self.y_scalers.append(ys)
 
     def __getattr__(self, name):
-        # backward compatibility: old pickles were trained with log10 transform
+        # backward compatibility: old pickles may be missing these attributes
         if name == "_profile_scale":
             return None
+        if name == "_start_idx":
+            return 0
         raise AttributeError(name)
 
     def predict(self, params_new):
-        """Returns mean (M, N_ap) and std (M, N_ap) in linear Y units."""
+        """Returns mean (M, N_ap) and std (M, N_ap) in linear Y units.
+        Only aperture bins [_start_idx:] are returned (set at training time)."""
         X_new = self.X_scaler.transform(params_new)
         means, stds = [], []
-        for gp, ys in zip(self.gps, self.y_scalers):
+        for gp, ys in zip(self.gps[self._start_idx:], self.y_scalers[self._start_idx:]):
             mu_s, sig_s = gp.predict(X_new, return_std=True)
             t_mu  = ys.inverse_transform(mu_s.reshape(-1, 1)).ravel()
             t_sig = sig_s * ys.scale_[0]
@@ -80,10 +83,11 @@ def load_data_ring_ring(npz_path, ring_width_arcmin=0.5):
 
 
 if __name__ == "__main__":
-    stacked_prof_path = "/home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles/all_steps_stacked_new.npz"
+    stacked_prof_path = "/home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles/all_steps_stacked_ring_ring11.npz"
     emulator_path = stacked_prof_path.replace(".npz", ".pkl")
 
-    params, profiles, apertures, param_names = load_data_cap(stacked_prof_path)
+    params, profiles, apertures, param_names = load_data_ring_ring(stacked_prof_path)
     em = GPEmulator(params, profiles)
+    em._start_idx = 2  # skip first two aperture bins; data has 9 points, emulator trains on 11
     em.save(emulator_path)
 

@@ -1,40 +1,44 @@
 
+import argparse
+import copy
+import gc
 import os
 import re
 import sys
-import argparse
+import yaml
 import numpy as np
 from pathlib import Path
 from time import perf_counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from loguru import logger
-from astropy.table import Table, vstack
+from astropy.table import Table
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tszpaint.logging import setup_logging
 from tszpaint.paint.abacus_loader import obtain_healcount_edges
-from ACT_data_match import stack_profiles, APERTURES_RR
+from tszpaint.cosmology.mass_conversion import H_ABACUS, MAX_M200M_H, Z_REF
+from ACT_data_match import stack_profiles, APERTURES_RR, APERTURES_CAP
 
-YMAP_ROOT  = Path("/home/ab2927/rds/hpc-work/tSZPaint_data")
-OUT_ROOT   = Path("/home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles")
-YMAP_DIR   = YMAP_ROOT / "Step0677-0682"
+# ── run configuration ────────────────────────────────────────────────────────
+NPROC       = 8           # parallel map workers (fiducial single-HOD run)
+FILTER_TYPE = "cap"       # "cap" or "ring_ring"
+APPLY_BEAM  = True
+# ─────────────────────────────────────────────────────────────────────────────
+
+YMAP_ROOT      = Path("/home/ab2927/rds/hpc-work/tSZPaint_data")
+OUT_ROOT       = Path("/home/ab2927/rds/hpc-work/tSZPaint_data/stacked_profiles")
+YMAP_DIR_RAW   = YMAP_ROOT / "Step0677-0682"
+YMAP_DIR_CONV  = YMAP_ROOT / "preconvolved_Step0677-0682"
 
 HEALCOUNTS_DIR = Path("/home/ab2927/rds/hpc-work/backlight_cp999/lightcone_healpix/total/heal-counts")
 SUMMED_STEPS = [
-    "Step0617-0622",
-    "Step0623-0627",
-    "Step0628-0634",
-    "Step0635-0640",
-    "Step0641-0646",
-    "Step0647-0652",
-    "Step0653-0658",
-    "Step0659-0664",
-    "Step0665-0670",
-    "Step0671-0676",
-    "Step0677-0682",
+    "Step0617-0622", "Step0623-0627", "Step0628-0634", "Step0635-0640",
+    "Step0641-0646", "Step0647-0652", "Step0653-0658", "Step0659-0664",
+    "Step0665-0670", "Step0671-0676", "Step0677-0682",
 ]
 
-LRG_SNAPSHOTS = [
+# Fiducial HOD catalog (used when --hod-idx is not given)
+FIDUCIAL_LRG_SNAPSHOTS = [
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.503/galaxies_rsd/LRGs.dat",
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.542/galaxies_rsd/LRGs.dat",
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.582/galaxies_rsd/LRGs.dat",
@@ -42,7 +46,18 @@ LRG_SNAPSHOTS = [
     YMAP_ROOT / "hod_mocks/lightcone_halos/z0.671/galaxies_rsd/LRGs.dat",
 ]
 
-PARAM_NAMES = ["alpha", "beta0", "gamma", "log10P0"]
+# HOD LHC grid catalog template (used when --hod-idx N is given)
+HOD_SNAPSHOT_TEMPLATES = [
+    str(YMAP_ROOT / "hod_mocks/lhc/{idx:03d}/lightcone_halos/z0.503/galaxies_rsd/LRGs.dat"),
+    str(YMAP_ROOT / "hod_mocks/lhc/{idx:03d}/lightcone_halos/z0.542/galaxies_rsd/LRGs.dat"),
+    str(YMAP_ROOT / "hod_mocks/lhc/{idx:03d}/lightcone_halos/z0.582/galaxies_rsd/LRGs.dat"),
+    str(YMAP_ROOT / "hod_mocks/lhc/{idx:03d}/lightcone_halos/z0.625/galaxies_rsd/LRGs.dat"),
+    str(YMAP_ROOT / "hod_mocks/lhc/{idx:03d}/lightcone_halos/z0.671/galaxies_rsd/LRGs.dat"),
+]
+
+PARAM_NAMES     = ["alpha", "beta0", "gamma", "log10P0"]
+HOD_PARAM_NAMES = ["log_Mcut", "log_M1", "sigma", "alpha_hod", "kappa"]
+HOD_LHC_FILE    = Path(__file__).parent / "hod_lhc_samples.txt"
 
 PARAM_RE = re.compile(
     r"alpha=(?P<alpha>[+-]?\d+\.?\d*(?:e[+-]?\d+)?)"
@@ -51,11 +66,12 @@ PARAM_RE = re.compile(
     r"_log10P0=(?P<log10P0>[+-]?\d+\.?\d*(?:e[+-]?\d+)?)"
 )
 
-
-_THETA_LRG  = None
-_PHI_LRG    = None
-_APPLY_BEAM = True
-_N_WORKERS  = None
+_THETA_LRG   = None
+_PHI_LRG     = None
+_APPLY_BEAM  = True
+_N_WORKERS   = None
+_FILTER_TYPE = "cap"
+_YMAP_DIR    = None
 
 
 def parse_params(filename: str) -> dict:
@@ -75,76 +91,193 @@ def get_chi_range() -> tuple[float, float]:
     return min(chi_mins), max(chi_maxs)
 
 
-def load_and_filter_lrgs(chi_min: float, chi_max: float):
-    tables = [Table.read(f, format="ascii.ecsv") for f in LRG_SNAPSHOTS]
-    combined = vstack(tables)
-    x = np.asarray(combined["x"])
-    y = np.asarray(combined["y"])
-    z = np.asarray(combined["z"])
+def load_and_filter_lrgs(snapshots: list, chi_min: float, chi_max: float):
+    tables = [Table.read(str(f), format="ascii.ecsv") for f in snapshots]
+    x   = np.concatenate([np.asarray(t["x"])    for t in tables])
+    y   = np.concatenate([np.asarray(t["y"])    for t in tables])
+    z   = np.concatenate([np.asarray(t["z"])    for t in tables])
+    m   = np.concatenate([np.asarray(t["mass"]) for t in tables])
     chi = np.sqrt(x**2 + y**2 + z**2)
-    mask = (chi >= chi_min) & (chi <= chi_max)
-    kept = combined[mask]
-    logger.info(f"LRGs: {len(combined):,} total → {mask.sum():,} kept  (chi=[{chi_min:.1f}, {chi_max:.1f}] Mpc/h)")
-    r     = np.sqrt(np.asarray(kept["x"])**2 + np.asarray(kept["y"])**2 + np.asarray(kept["z"])**2)
-    theta = np.arccos(np.asarray(kept["z"]) / r)
-    phi   = np.arctan2(np.asarray(kept["y"]), np.asarray(kept["x"])) % (2 * np.pi)
+    mask = (chi >= chi_min) & (chi <= chi_max) & (m <= MAX_M200M_H)
+    x, y, z = x[mask], y[mask], z[mask]
+    logger.info(
+        f"LRGs: {len(m):,} total → {mask.sum():,} kept  "
+        f"(chi=[{chi_min:.1f},{chi_max:.1f}] Mpc/h, M200m <= {MAX_M200M_H/H_ABACUS:.2e} M_sun)"
+    )
+    r     = np.sqrt(x**2 + y**2 + z**2)
+    theta = np.arccos(z / r)
+    phi   = np.arctan2(y, x) % (2 * np.pi)
+    return theta, phi
+
+
+HOD_CONFIG_PATH = Path(__file__).resolve().parents[1] / "abacusHOD" / "config.yaml"
+HOD_Z_SNAPSHOTS = [0.503, 0.542, 0.582, 0.625, 0.671]
+
+
+def _patch_asdf():
+    """Monkey-patch asdf so old LCOrigins header key is transparently aliased."""
+    import asdf as _asdf
+    import abacusnbody.hod.abacus_hod as _hod_module
+    _orig = _asdf.open
+    def _patched(fn, *a, **kw):
+        af = _orig(fn, *a, **kw)
+        if "header" in af:
+            h = af["header"]
+            if "LightConeOrigins" not in h and "LCOrigins" in h:
+                h["LightConeOrigins"] = h["LCOrigins"]
+        return af
+    _asdf.open = _patched
+    _hod_module.asdf = _asdf
+
+
+def generate_lrgs_in_memory(hod_idx: int, chi_min: float, chi_max: float):
+    """Run AbacusHOD in-memory for hod_idx"""
+    from abacusnbody.hod.abacus_hod import AbacusHOD
+
+    _patch_asdf()
+
+    config     = yaml.safe_load(open(HOD_CONFIG_PATH))
+    sim_params = config["sim_params"]
+    hod_params = copy.deepcopy(config["HOD_params"])
+
+    row = np.loadtxt(HOD_LHC_FILE, comments="#")[hod_idx]
+    logM_cut, logM1, sigma, alpha_hod, kappa = row
+    hod_params["LRG_params"].update(dict(
+        logM_cut=logM_cut, logM1=logM1, sigma=sigma, alpha=alpha_hod, kappa=kappa,
+    ))
+    logger.info(
+        f"HOD {hod_idx}: logM_cut={logM_cut:.4f}  logM1={logM1:.4f}  "
+        f"sigma={sigma:.4f}  alpha={alpha_hod:.4f}  kappa={kappa:.4f}"
+    )
+
+    xs, ys, zs, ms = [], [], [], []
+    for z in HOD_Z_SNAPSHOTS:
+        sp = copy.deepcopy(sim_params)
+        sp["z_mock"]    = z
+        sp["output_dir"] = "/tmp"   # unused — write_to_disk=False
+        ball = AbacusHOD(sp, hod_params)
+        mock = ball.run_hod(ball.tracers, want_rsd=True, write_to_disk=False, Nthread=8)
+        lrg  = mock["LRG"]
+        xs.append(np.asarray(lrg["x"],    dtype=np.float64))
+        ys.append(np.asarray(lrg["y"],    dtype=np.float64))
+        zs.append(np.asarray(lrg["z"],    dtype=np.float64))
+        ms.append(np.asarray(lrg["mass"], dtype=np.float64))
+        logger.info(f"  z={z:.3f}: {len(xs[-1]):,} LRGs")
+
+    x   = np.concatenate(xs)
+    y   = np.concatenate(ys)
+    z_c = np.concatenate(zs)
+    m   = np.concatenate(ms)
+
+    chi  = np.sqrt(x**2 + y**2 + z_c**2)
+    mask = (chi >= chi_min) & (chi <= chi_max) & (m <= MAX_M200M_H)
+    x, y, z_c = x[mask], y[mask], z_c[mask]
+    logger.info(
+        f"LRGs: {len(m):,} total → {mask.sum():,} kept  "
+        f"(chi=[{chi_min:.1f},{chi_max:.1f}] Mpc/h, M200m <= {MAX_M200M_H/H_ABACUS:.2e} M_sun)"
+    )
+    r     = np.sqrt(x**2 + y**2 + z_c**2)
+    theta = np.arccos(z_c / r)
+    phi   = np.arctan2(y, x) % (2 * np.pi)
     return theta, phi
 
 
 def _worker_init(omp_threads: int):
-    """Limit OMP threads per worker so beam convolution doesn't OOM."""
     for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[var] = str(omp_threads)
 
 
 def _process_one(fname: str):
-    """Worker: stack one y-map. Uses fork-inherited _THETA_LRG/_PHI_LRG."""
-    import gc
+    """Worker: stack one y-map. Uses fork-inherited globals."""
     params = parse_params(fname)
     t0 = perf_counter()
     y_stacked, y_err = stack_profiles(
-        str(YMAP_DIR / fname), _THETA_LRG, _PHI_LRG, apply_beam=_APPLY_BEAM, n_workers=_N_WORKERS
+        str(_YMAP_DIR / fname), _THETA_LRG, _PHI_LRG,
+        apply_beam=_APPLY_BEAM, n_workers=_N_WORKERS, filter_type=_FILTER_TYPE,
     )
     elapsed = perf_counter() - t0
-    gc.collect()   # ensure the 3 GB y-map is released before next job
+    gc.collect()
     return fname, [params[k] for k in PARAM_NAMES], y_stacked, y_err, elapsed
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--param",   default=None)
-    parser.add_argument("--output",  default="all_steps_stacked_ring_ring11.npz")
-    parser.add_argument("--no-beam", action="store_true")
-    parser.add_argument("--nproc",   type=int, default=1,
-                        help="Number of parallel workers (each needs ~11 GB)")
+    parser.add_argument("--hod-idx", type=int, default=None,
+                        help="HOD LHC index (0-199). Omit for fiducial single-HOD run.")
+    parser.add_argument("--nproc", type=int, default=None,
+                        help="Override NPROC map workers.")
+    parser.add_argument("--ymap-start", type=int, default=None,
+                        help="Start index into sorted y-map list (for batched runs).")
+    parser.add_argument("--ymap-end", type=int, default=None,
+                        help="End index into sorted y-map list (exclusive, for batched runs).")
     args = parser.parse_args()
 
-    setup_logging("ring_ring_stack")
+    hod_idx    = args.hod_idx
+    nproc      = args.nproc or NPROC
+    ymap_start = args.ymap_start
+    ymap_end   = args.ymap_end
+    batched    = ymap_start is not None or ymap_end is not None
+
+    # ── resolve run-specific config ──────────────────────────────────────────
+    if hod_idx is None:
+        # Fiducial run: raw maps (with beam convolution), fiducial HOD
+        ymap_dir    = YMAP_DIR_RAW
+        apply_beam  = APPLY_BEAM
+        snapshots   = FIDUCIAL_LRG_SNAPSHOTS
+        hod_params  = None
+        output_name = f"fiducial_{FILTER_TYPE}.npz"
+        log_name    = f"{FILTER_TYPE}_stack"
+        out_dir     = OUT_ROOT
+    else:
+        # HOD grid run: preconvolved maps, catalog generated in-memory
+        ymap_dir    = YMAP_DIR_CONV
+        apply_beam  = False   # beam already applied by preconvolve_maps.py
+        snapshots   = None    # unused — generate_lrgs_in_memory is called instead
+        hod_params  = np.loadtxt(HOD_LHC_FILE, comments="#")[hod_idx]   # (5,) saved to output
+        output_name = f"hod_{hod_idx:03d}.npz"
+        out_dir     = OUT_ROOT / "hod_lhc"
+        log_name    = f"hod_stack_{hod_idx:03d}"
+    # ─────────────────────────────────────────────────────────────────────────
+
+    setup_logging(log_name)
+    if hod_idx is not None:
+        logger.info(f"HOD grid run: index {hod_idx}")
 
     chi_min, chi_max = get_chi_range()
-    logger.info(f"Summed y-map chi range: [{chi_min:.1f}, {chi_max:.1f}] Mpc/h")
+    logger.info(f"y-map chi range: [{chi_min:.1f}, {chi_max:.1f}] Mpc/h")
 
-    # Load LRGs once; fork-inherited by all workers at no extra memory cost
-    global _THETA_LRG, _PHI_LRG, _APPLY_BEAM, _N_WORKERS
-    _THETA_LRG, _PHI_LRG = load_and_filter_lrgs(chi_min, chi_max)
-    _APPLY_BEAM = not args.no_beam
-    _N_WORKERS  = max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count())) // args.nproc)
+    global _THETA_LRG, _PHI_LRG, _APPLY_BEAM, _N_WORKERS, _FILTER_TYPE, _YMAP_DIR
+    if hod_idx is not None:
+        _THETA_LRG, _PHI_LRG = generate_lrgs_in_memory(hod_idx, chi_min, chi_max)
+    else:
+        _THETA_LRG, _PHI_LRG = load_and_filter_lrgs(snapshots, chi_min, chi_max)
 
-    all_fnames = sorted(f.name for f in YMAP_DIR.glob("*.asdf"))
-    if args.param:
-        all_fnames = [f for f in all_fnames if args.param in f]
-        if not all_fnames:
-            raise ValueError(f"No file matching --param '{args.param}'")
+    MAX_LRG = 4_000_000
+    if hod_idx is not None and len(_THETA_LRG) > MAX_LRG:
+        rng = np.random.default_rng(seed=hod_idx)
+        sub = rng.choice(len(_THETA_LRG), MAX_LRG, replace=False)
+        _THETA_LRG = _THETA_LRG[sub]
+        _PHI_LRG   = _PHI_LRG[sub]
+        logger.info(f"Subsampled to {MAX_LRG:,} galaxies (seed={hod_idx})")
 
-    out_file = OUT_ROOT / args.output
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Processing {len(all_fnames)} maps with {args.nproc} worker(s) → {out_file}")
+    _APPLY_BEAM  = apply_beam
+    _N_WORKERS   = max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count())) // nproc)
+    _FILTER_TYPE = FILTER_TYPE
+    _YMAP_DIR    = ymap_dir
 
-    results = {}   # fname → (params, y_stacked, y_err)
+    ext        = ".npy" if not apply_beam else ".asdf"
+    all_fnames = sorted(f.name for f in ymap_dir.glob(f"*{ext}"))
+    if batched:
+        all_fnames = all_fnames[ymap_start:ymap_end]
+        logger.info(f"Batched run: y-maps [{ymap_start}:{ymap_end}] → {len(all_fnames)} maps")
 
-    omp_per_worker = max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", args.nproc)) // args.nproc)
-    logger.info(f"OMP threads per worker: {omp_per_worker}")
-    with ProcessPoolExecutor(max_workers=args.nproc,
+    out_file = out_dir / output_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Processing {len(all_fnames)} maps ({nproc} workers) → {out_file}")
+
+    results = {}
+    omp_per_worker = max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", nproc)) // nproc)
+    with ProcessPoolExecutor(max_workers=nproc,
                              initializer=_worker_init,
                              initargs=(omp_per_worker,)) as ex:
         futures = {ex.submit(_process_one, fname): fname for fname in all_fnames}
@@ -157,7 +290,6 @@ def main():
             except Exception as e:
                 logger.error(f"[{i}/{len(all_fnames)}] FAILED {fname}: {e}")
 
-    # Reconstruct in sorted order
     all_params, profiles, errors = [], [], []
     for fname in sorted(results):
         params, y_stacked, y_err = results[fname]
@@ -165,15 +297,18 @@ def main():
         profiles.append(y_stacked)
         errors.append(y_err)
 
-    np.savez(
-        out_file,
-        params=np.array(all_params),    # (N, 4)
-        param_names=PARAM_NAMES,
-        profiles=np.array(profiles),     # (N, N_ap)
-        errors=np.array(errors),         # (N, N_ap)
-        apertures_arcmin=APERTURES_RR,
+    save_kwargs = dict(
+        params           = np.array(all_params),
+        param_names      = PARAM_NAMES,
+        profiles         = np.array(profiles),
+        errors           = np.array(errors),
+        apertures_arcmin = APERTURES_CAP if FILTER_TYPE == "cap" else APERTURES_RR,
     )
-    print(f"Saved {len(profiles)} profiles → {out_file}")
+    if hod_params is not None:
+        save_kwargs["hod_params"]      = hod_params
+        save_kwargs["param_names_hod"] = HOD_PARAM_NAMES
+    np.savez(out_file, **save_kwargs)
+    logger.info(f"Saved {len(profiles)} profiles → {out_file}")
 
 
 if __name__ == "__main__":

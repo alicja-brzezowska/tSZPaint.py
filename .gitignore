@@ -32,3 +32,8 @@ miscellanous/
 machine.file.*
 multirun
 outputs
+
+# Job logs
+logs/
+*.err
+*.out

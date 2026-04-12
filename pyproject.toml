@@ -8,6 +8,7 @@ dependencies = [
     "abacusutils[all]>=2.1.2",
     "asdf>=5.1.0",
     "astropy>=7.1.1",
+    "colossus>=1.3.17",
     "cosmo>=0.7.0",
     "h5py>=3.15.1",
     "healpy>=1.19.0",

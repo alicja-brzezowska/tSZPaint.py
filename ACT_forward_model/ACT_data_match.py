@@ -1,12 +1,12 @@
 """
-Forward model: stack tSZ y-map at mock LRG positions and compute CAP-filtered profiles.
+Forward model: stack tSZ y-map at mock LRG positions and compute CAP or RING-RING-filtered profiles.
 
   1. Load y-map 
   2. Convolve with ACT beam (FWHM=1.6 arcmin)
   3. Load mock LRG catalog (AbacusHOD ECSV output)
   4. Convert comoving (x,y,z) → angular (theta, phi)
-  5. For each galaxy: apply CAP filter at apertures 1–6 arcmin
-  6. Stack (mean) over all galaxies → y_CAP(theta)
+  5. For each galaxy: apply CAP or RING-RING filter at apertures 1–6 arcmin
+  6. Stack (mean) over all galaxies → y_CAP(theta) or y_RR(theta)
 """
 
 import os
@@ -25,11 +25,14 @@ APERTURES = APERTURES_CAP  # default
 BEAM_FWHM = 1.6   # Liu 2025, arcmin
 
 def load_ymap(ymap_file):
-    """Load y-map from ASDF"""
+    """Load y-map from ASDF or pre-convolved .npy file."""
+    if str(ymap_file).endswith('.npy'):
+        ymap  = np.load(str(ymap_file))
+        nside = hp.get_nside(ymap)
+        return ymap, nside
     with asdf.open(ymap_file) as f:
         ymap = np.array(f['data']['y_map'])
         nside = int(f['header']['nside'])
-
     return ymap, nside
 
 
@@ -39,15 +42,14 @@ def convolve_beam(ymap, fwhm_arcmin=BEAM_FWHM):
     t0 = perf_counter()
     nside = hp.get_nside(ymap)
     ell_max = 12000
-    alm = hp.map2alm(ymap, lmax=ell_max)
+    alm = hp.map2alm(hp.reorder(ymap, n2r=True), lmax=ell_max)  # map2alm requires RING
     ell = np.arange(ell_max+1)
     def gauss_beam(ellsq, fwhm):
         tht_fwhm = np.deg2rad(fwhm/60.)
         return np.exp(-0.5*(tht_fwhm**2.)*(ellsq)/(8.*np.log(2.)))
     fl = gauss_beam(ell*(ell+1), fwhm_arcmin)
-    # healpy.almxfl expects fl up to lmax of alm
     alm_fl = hp.almxfl(alm, fl[:alm.size]) if fl.size > alm.size else hp.almxfl(alm, fl)
-    ymap_fl = hp.alm2map(alm_fl, nside)
+    ymap_fl = hp.reorder(hp.alm2map(alm_fl, nside), r2n=True)  # back to NESTED
     logger.info(f"Beam convolution done in {perf_counter()-t0:.1f}s")
     return ymap_fl
 
@@ -76,18 +78,19 @@ def cap_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, n_workers=No
     max_rad   = outer_rad[-1]
 
     def process_galaxy(i):
-        vec  = hp.ang2vec(theta[i], phi[i])
-        ipix = hp.query_disc(nside, vec, max_rad, nest=True)
-        if len(ipix) == 0:
+        vec       = hp.ang2vec(theta[i], phi[i])
+        ipix_ring = hp.query_disc(nside, vec, max_rad, nest=False)  # RING: no nside limit
+        if len(ipix_ring) == 0:
             return i, np.zeros(N_ap)
 
-        pix_vec = np.array(hp.pix2vec(nside, ipix, nest=True)).T
+        pix_vec = np.array(hp.pix2vec(nside, ipix_ring, nest=False)).T
         ang     = np.arccos(np.clip(pix_vec @ vec, -1.0, 1.0))
 
-        sort_idx = np.argsort(ang)
-        ang_s    = ang[sort_idx]
-        y_s      = ymap[ipix[sort_idx]].astype(np.float64)
-        cumsum   = np.cumsum(y_s)
+        sort_idx  = np.argsort(ang)
+        ang_s     = ang[sort_idx]
+        ipix_nest = hp.ring2nest(nside, ipix_ring)
+        y_s       = ymap[ipix_nest[sort_idx]].astype(np.float64)
+        cumsum    = np.cumsum(y_s)
 
         row = np.zeros(N_ap)
         for j in range(N_ap):
@@ -101,17 +104,22 @@ def cap_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES, n_workers=No
             row[j]   = (disc_sum / n_disc) - (ann_sum / n_ann)
         return i, row
 
+    CHUNK = 50_000   # max futures in flight at once — keeps memory bounded
     t0 = perf_counter()
+    k  = 0
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
-        futures = {executor.submit(process_galaxy, i): i for i in range(N_gal)}
-        for k, future in enumerate(as_completed(futures)):
-            if k % 50000 == 0:
-                elapsed = perf_counter() - t0
-                rate = k / elapsed if elapsed > 0 else 0
-                eta  = (N_gal - k) / rate if rate > 0 else float('inf')
-                logger.info(f"CAP: {k}/{N_gal} ({100*k/N_gal:.0f}%)  {rate:.0f} gal/s  ETA {eta/60:.1f} min")
-            i, row = future.result()
-            cap_values[i] = row
+        for start in range(0, N_gal, CHUNK):
+            end = min(start + CHUNK, N_gal)
+            chunk_futures = [executor.submit(process_galaxy, i) for i in range(start, end)]
+            for future in as_completed(chunk_futures):
+                i, row = future.result()
+                cap_values[i] = row
+                k += 1
+                if k % 50000 == 0:
+                    elapsed = perf_counter() - t0
+                    rate = k / elapsed if elapsed > 0 else 0
+                    eta  = (N_gal - k) / rate if rate > 0 else float('inf')
+                    logger.info(f"CAP: {k}/{N_gal} ({100*k/N_gal:.0f}%)  {rate:.0f} gal/s  ETA {eta/60:.1f} min")
 
     logger.info(f"CAP filter done in {perf_counter()-t0:.1f}s")
     return cap_values
@@ -135,18 +143,19 @@ def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES_RR, rin
     max_rad   = theta_out[-1]
 
     def process_galaxy(i):
-        vec  = hp.ang2vec(theta[i], phi[i])
-        ipix = hp.query_disc(nside, vec, max_rad, nest=True)
-        if len(ipix) == 0:
+        vec       = hp.ang2vec(theta[i], phi[i])
+        ipix_ring = hp.query_disc(nside, vec, max_rad, nest=False)  
+        if len(ipix_ring) == 0:
             return i, np.zeros(N_ap)
 
-        pix_vec = np.array(hp.pix2vec(nside, ipix, nest=True)).T
+        pix_vec = np.array(hp.pix2vec(nside, ipix_ring, nest=False)).T
         ang     = np.arccos(np.clip(pix_vec @ vec, -1.0, 1.0))
 
-        sort_idx = np.argsort(ang)
-        ang_s    = ang[sort_idx]
-        y_s      = ymap[ipix[sort_idx]].astype(np.float64)
-        cumsum   = np.cumsum(y_s)
+        sort_idx  = np.argsort(ang)
+        ang_s     = ang[sort_idx]
+        ipix_nest = hp.ring2nest(nside, ipix_ring)
+        y_s       = ymap[ipix_nest[sort_idx]].astype(np.float64)
+        cumsum    = np.cumsum(y_s)
 
         row = np.zeros(N_ap)
         for j in range(N_ap):
@@ -180,10 +189,12 @@ def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES_RR, rin
     return rr_values
 
 
-def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True, n_workers=None):
+def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True, n_workers=None,
+                   filter_type="ring_ring"):
     """
-    ymap_file : str — single pre-summed y-map (ASDF)
-    theta, phi: pre-loaded, chi-filtered galaxy positions in radians
+    ymap_file   : str — single pre-summed y-map (ASDF)
+    theta, phi  : pre-loaded, chi-filtered galaxy positions in radians
+    filter_type : "ring_ring" or "cap"
     """
     t_total = perf_counter()
     ymap, nside = load_ymap(ymap_file)
@@ -196,22 +207,30 @@ def stack_profiles(ymap_file, theta, phi, output_file=None, apply_beam=True, n_w
 
     logger.info(f"{len(theta):,} galaxies")
 
-    logger.info("Applying ring-ring filter...")
-    cap_values = ring_ring_filter(ymap, nside, theta, phi, n_workers=n_workers)
+    if filter_type == "cap":
+        logger.info("Applying CAP filter...")
+        values = cap_filter(ymap, nside, theta, phi, n_workers=n_workers)
+        apertures = APERTURES_CAP
+        label = "CAP"
+    else:
+        logger.info("Applying ring-ring filter...")
+        values = ring_ring_filter(ymap, nside, theta, phi, n_workers=n_workers)
+        apertures = APERTURES_RR
+        label = "ring-ring"
 
-    y_stacked = cap_values.mean(axis=0)
-    y_err     = cap_values.std(axis=0) / np.sqrt(len(theta))
-    logger.info("Stacked ring-ring profile:")
-    for ap, y, e in zip(APERTURES_RR, y_stacked, y_err):
+    y_stacked = values.mean(axis=0)
+    y_err     = values.std(axis=0) / np.sqrt(len(theta))
+    logger.info(f"Stacked {label} profile:")
+    for ap, y, e in zip(apertures, y_stacked, y_err):
         logger.info(f"  {ap:.1f} arcmin: {y:.4e} ± {e:.4e}")
     logger.info(f"Total stack_profiles time: {perf_counter()-t_total:.1f}s")
 
     if output_file:
         np.savez(output_file,
-                 apertures_arcmin=APERTURES_RR,
+                 apertures_arcmin=apertures,
                  y_stacked=y_stacked,
                  y_err=y_err,
-                 rr_values=cap_values)
+                 values=values)
         logger.info(f"Saved to {output_file}")
 
     return y_stacked, y_err
