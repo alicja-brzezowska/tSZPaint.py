@@ -144,7 +144,7 @@ def ring_ring_filter(ymap, nside, theta, phi, apertures_arcmin=APERTURES_RR, rin
 
     def process_galaxy(i):
         vec       = hp.ang2vec(theta[i], phi[i])
-        ipix_ring = hp.query_disc(nside, vec, max_rad, nest=False)  
+        ipix_ring = hp.query_disc(nside, vec, max_rad, nest=False)
         if len(ipix_ring) == 0:
             return i, np.zeros(N_ap)
 
